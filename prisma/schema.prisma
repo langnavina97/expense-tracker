@@ -1,0 +1,31 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Category {
+  id Int @id @default(autoincrement())
+  name String @unique
+  expenses Expense[]
+}
+
+model Expense {
+  id Int @id @default(autoincrement())
+  title String
+  categoryId Int
+  category Category @relation(fields: [categoryId], references: [id])
+  spender String
+  currency String
+  amount Int
+  convertedAmount Int? // TODO: populate via exchange-rate API conversion
+  date DateTime @db.Date
+}
