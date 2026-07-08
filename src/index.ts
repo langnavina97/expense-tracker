@@ -1,6 +1,7 @@
 import express from "express";
 import { errorHandler } from "./middleware.js";
 import expensesRouter from "./routes/expenses.js";
+import cateoriesRouter from "./routes/categories.js";
 
 // Create an instance of the Express application, representing the server.
 const app = express();
@@ -12,6 +13,8 @@ app.get("/health", (req, res) => {
 });
 
 app.use("/expenses", expensesRouter);
+
+app.use("/categories", cateoriesRouter);
 
 app.use(errorHandler);
 
