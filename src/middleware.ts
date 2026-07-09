@@ -2,7 +2,7 @@ import express from "express";
 
 // Returns a valid integer id, or null if rawId is missing/not one.
 export function parseId(rawId: string | string[] | undefined): number | null {
-  if (typeof rawId !== "string") return null;
+  if (typeof rawId !== "string" || rawId === "") return null;
   const id = Number(rawId);
   return Number.isInteger(id) ? id : null;
 }

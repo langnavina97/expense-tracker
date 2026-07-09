@@ -17,6 +17,26 @@ router.get("/", async (req, res, next) => {
   }
 });
 
+router.get("/:id", requireValidId, async (req, res, next) => {
+  const id = res.locals.id;
+
+  try {
+    // Fetch a specific category record by ID from the database using Prisma.
+    const category = await prisma.category.findUnique({
+      where: { id },
+    });
+
+    if (!category) {
+      return res.status(404).json({ error: "Category not found." });
+    }
+
+    // Respond with the found category record.
+    res.status(200).json(category);
+  } catch (error) {
+    next(error);
+  }
+});
+
 router.post("/", async (req, res, next) => {
     const {name} = req.body;
 

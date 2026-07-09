@@ -2,12 +2,13 @@ import { Router } from "express";
 import { prisma } from "../prisma.js";
 import { requireValidId } from "../middleware.js";
 import { Prisma } from "../generated/prisma/client.js";
+import { getExchangeRate } from "../exchangeRate.js";
 
-const SUPPORTED_CURRENCIES = ["USD", "EUR", "MXN", "GBP", "JPY", "CAD", "CHF"];
+export const SUPPORTED_CURRENCIES = ["USD", "EUR", "MXN", "GBP", "JPY", "CAD", "CHF"];
 
 // Shared body validation for POST (partial: false) and PATCH (partial: true).
 // Returns an error message string, or null if valid.
-function validateExpenseInput(
+export function validateExpenseInput(
   body: any,
   { partial }: { partial: boolean }
 ): string | null {
@@ -43,7 +44,7 @@ router.post("/", async (req, res, next) => {
         spender,
         currency,
         amount,
-        convertedAmount,
+        convertedAmount: await getExchangeRate(currency, "USD", amount), // Convert to USD using the exchange rate function
         date: new Date(date),  // req.body.date arrives as a string, Prisma needs a Date object
       },
     });
@@ -100,6 +101,14 @@ router.patch("/:id", requireValidId, async (req, res, next) => {
   }
 
   try {
+    const existingExpense = await prisma.expense.findUnique({ where: { id } });
+    if (!existingExpense) {
+      return res.status(404).json({ error: "Expense not found." });
+    }
+
+    const effectiveCurrency = currency ?? existingExpense.currency;
+    const effectiveAmount = amount ?? existingExpense.amount;
+
     // Update a specific expense record by ID in the database using Prisma.
     const updatedExpense = await prisma.expense.update({
       where: { id },
@@ -109,7 +118,9 @@ router.patch("/:id", requireValidId, async (req, res, next) => {
         spender,
         currency,
         amount,
-        convertedAmount,
+        ...((currency !== undefined || amount !== undefined) && {
+          convertedAmount: await getExchangeRate(effectiveCurrency, "USD", effectiveAmount),
+        }),
         ...(date && { date: new Date(date) }),
       },
     });
