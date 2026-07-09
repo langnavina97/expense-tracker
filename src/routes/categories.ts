@@ -3,6 +3,25 @@ import { prisma } from "../prisma.js";
 import { requireValidId } from "../middleware.js";
 import { Prisma } from "../generated/prisma/client.js";
 
+// Shared body validation for POST (partial: false) and PATCH (partial: true).
+// Returns an error message string, or null if valid.
+export function validateCategoryInput(
+  body: any,
+  { partial }: { partial: boolean }
+): string | null {
+  const { name } = body;
+
+  if (!partial && !name) {
+    return "name is required.";
+  }
+
+  if (partial && name !== undefined && !name) {
+    return "name cannot be empty.";
+  }
+
+  return null;
+}
+
 const router = Router();
 
 router.get("/", async (req, res, next) => {
@@ -40,8 +59,9 @@ router.get("/:id", requireValidId, async (req, res, next) => {
 router.post("/", async (req, res, next) => {
     const {name} = req.body;
 
-    if (!name) {
-        return res.status(400).json({ error: "name is required." });
+    const validationError = validateCategoryInput(req.body, { partial: false });
+    if (validationError) {
+        return res.status(400).json({ error: validationError });
     }
 
     try {
@@ -66,8 +86,9 @@ router.patch("/:id", requireValidId, async (req, res, next) => {
     const id = res.locals.id;
     const { name } = req.body;
 
-    if (name !== undefined && !name) {
-        return res.status(400).json({ error: "name cannot be empty." });
+    const validationError = validateCategoryInput(req.body, { partial: true });
+    if (validationError) {
+        return res.status(400).json({ error: validationError });
     }
 
     try {

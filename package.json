@@ -4,7 +4,8 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "vitest run",
+    "test": "dotenv -e .env.test -- vitest run",
+    "test:coverage": "dotenv -e .env.test -- vitest run --coverage",
     "dev": "tsx watch src/index.ts"
   },
   "repository": {
@@ -22,7 +23,11 @@
   "devDependencies": {
     "@types/express": "^5.0.6",
     "@types/node": "^26.1.0",
+    "@types/supertest": "^7.2.0",
+    "@vitest/coverage-v8": "^4.1.10",
+    "dotenv-cli": "^11.0.0",
     "prisma": "^7.8.0",
+    "supertest": "^7.2.2",
     "tsx": "^4.23.0",
     "typescript": "^6.0.3",
     "vitest": "^4.1.10"

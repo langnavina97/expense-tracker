@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { getExchangeRate } from "./exchangeRate.js";
+import { getExchangeRate } from "../exchangeRate.js";
 
 afterEach(() => {
   vi.unstubAllGlobals();

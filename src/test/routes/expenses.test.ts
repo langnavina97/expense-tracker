@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { validateExpenseInput } from "./expenses.js";
+import { validateExpenseInput } from "../../routes/expenses.js";
 
 const validBody = {
   categoryId: 1,
