@@ -77,6 +77,9 @@ export function DashboardPage() {
   if (!household || !currentUser) return null;
 
   const categoryById = new Map(categories.map((c) => [c.id, c]));
+  // Same index-based assignment the pie chart uses, so a category's badge
+  // color always matches its slice.
+  const categoryColor = new Map(categories.map((c, i) => [c.id, CHART_COLORS[i % CHART_COLORS.length]!]));
 
   // Category breakdown always reflects every expense, regardless of the
   // filter below - it's the "big picture" the filter lets you drill into.
@@ -193,7 +196,17 @@ export function DashboardPage() {
                     <div className="expense-row-main">
                       <div className="expense-title">{expense.title}</div>
                       <div className="expense-meta">
-                        {category && <span className="badge">{category.name}</span>}
+                        {category && (
+                          <span
+                            className="badge"
+                            style={{
+                              backgroundColor: `${categoryColor.get(category.id)}22`,
+                              color: categoryColor.get(category.id),
+                            }}
+                          >
+                            {category.name}
+                          </span>
+                        )}
                         <span>{expense.date.slice(0, 10)}</span>
                         <span>{expense.spenders.map((s) => spenderName(s.id, household)).join(", ")}</span>
                       </div>

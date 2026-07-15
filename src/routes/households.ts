@@ -78,6 +78,18 @@ router.post("/members", async (req, res, next) => {
   }
 
   try {
+    const targetUser = await prisma.user.findUnique({ where: { id: userId } });
+    if (!targetUser || targetUser.deletedAt) {
+      return res.status(404).json({ error: "User not found." });
+    }
+
+    // Without this check, adding someone who already belongs to a household
+    // (possibly as its own lead) silently rips them out of it and
+    // overwrites their role - orphaning whatever household they had.
+    if (targetUser.householdId) {
+      return res.status(409).json({ error: "This user already belongs to a household." });
+    }
+
     const updatedUser = await prisma.user.update({
       where: { id: userId },
       data: { householdId: currentUser.householdId, role },

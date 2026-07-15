@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import request from "supertest";
 import { app } from "../../app.js";
 import { prisma } from "../../prisma.js";
+import { Prisma } from "../../generated/prisma/client.js";
 import { createAuthenticatedAgent } from "../helpers.js";
 
 afterEach(() => {
@@ -35,9 +36,44 @@ describe("households routes - unexpected database errors fall through to the gen
 
   it("POST /members returns 500 on an unexpected database error", async () => {
     const { agent } = await createAuthenticatedAgent();
+    const otherAgent = request.agent(app);
+    const otherUser = await otherAgent.post("/users").send({
+      name: "No Household",
+      email: "members-500@example.com",
+      password: "correcthorsebatterystaple",
+    });
+
     vi.spyOn(prisma.user, "update").mockRejectedValueOnce(new Error("db down"));
+    const response = await agent.post("/households/members").send({ userId: otherUser.body.id, role: "ADULT" });
+    expect(response.status).toBe(500);
+  });
+
+  it("POST /members returns 500 if the target-user lookup itself fails unexpectedly", async () => {
+    const { agent, userId } = await createAuthenticatedAgent();
+    // requireAuth does its own findUnique first (to load the caller) - let
+    // that succeed, and only fail the route handler's own lookup.
+    const currentUser = await prisma.user.findUnique({ where: { id: userId } });
+    vi.spyOn(prisma.user, "findUnique")
+      .mockResolvedValueOnce(currentUser as any)
+      .mockRejectedValueOnce(new Error("db down"));
     const response = await agent.post("/households/members").send({ userId: 1, role: "ADULT" });
     expect(response.status).toBe(500);
+  });
+
+  it("POST /members returns 404 if the target user was deleted between the check and the update (race condition)", async () => {
+    const { agent } = await createAuthenticatedAgent();
+    const otherAgent = request.agent(app);
+    const otherUser = await otherAgent.post("/users").send({
+      name: "No Household",
+      email: "members-race@example.com",
+      password: "correcthorsebatterystaple",
+    });
+
+    vi.spyOn(prisma.user, "update").mockRejectedValueOnce(
+      new Prisma.PrismaClientKnownRequestError("Record not found", { code: "P2025", clientVersion: "test" })
+    );
+    const response = await agent.post("/households/members").send({ userId: otherUser.body.id, role: "ADULT" });
+    expect(response.status).toBe(404);
   });
 
   it("POST /dependents returns 500 on an unexpected database error", async () => {

@@ -113,6 +113,21 @@ describe("households routes", () => {
     expect(response.status).toBe(404);
   });
 
+  it("POST /members refuses to reassign someone who already belongs to another household", async () => {
+    const { agent: leadAgent } = await createAuthenticatedAgent();
+    // This user is the LEAD of their own, separate household.
+    const { agent: otherLeadAgent, userId: otherLeadUserId } = await registerAndLoginNoHousehold("otherlead@example.com");
+    await otherLeadAgent.post("/households").send({ name: "Their Own Household" });
+
+    const response = await leadAgent.post("/households/members").send({ userId: otherLeadUserId, role: "ADULT" });
+
+    expect(response.status).toBe(409);
+
+    // Confirm they weren't actually moved - still LEAD of their own household.
+    const stillTheirs = await otherLeadAgent.get("/users/me");
+    expect(stillTheirs.body.role).toBe("LEAD");
+  });
+
   it("POST /dependents adds a dependent to the household", async () => {
     const { agent, householdId } = await createAuthenticatedAgent();
 
