@@ -73,7 +73,7 @@ router.post("/login", async (req, res, next) => {
       omit: { passwordHash: false },
     });
 
-    if (!user) {
+    if (!user || user.deletedAt) {
       return res.status(401).json({ error: "Invalid email or password." });
     }
 
@@ -102,7 +102,7 @@ router.get("/", async (req, res, next) => {
     // with no household yet only ever sees themselves.
     const { householdId } = res.locals.currentUser;
     const users = householdId
-      ? await prisma.user.findMany({ where: { householdId } })
+      ? await prisma.user.findMany({ where: { householdId, deletedAt: null } })
       : [res.locals.currentUser];
 
     // Respond with the list of users.
@@ -121,7 +121,7 @@ router.get("/:id", requireValidId, async (req, res, next) => {
       where: { id },
     });
 
-    if (!user) {
+    if (!user || user.deletedAt) {
       return res.status(404).json({ error: "User not found." });
     }
 
@@ -182,13 +182,22 @@ router.delete("/:id", requireValidId, async (req, res, next) => {
     }
 
     try {
-        // Delete the user record from the database using Prisma.
-        await prisma.user.delete({
+        // Soft delete: keep the row (existing expenses still reference a
+        // valid creator) but anonymize personal data and mark it inactive.
+        await prisma.user.update({
             where: { id },
+            data: {
+                deletedAt: new Date(),
+                email: `deleted-user-${id}@deleted.invalid`,
+                name: "Deleted User",
+                passwordHash: "",
+            },
         });
 
-        // Respond with a success message.
-        res.status(200).json({ message: "User deleted successfully." });
+        req.session.destroy((err) => {
+            if (err) return next(err);
+            res.status(200).json({ message: "User deleted successfully." });
+        });
     } catch (error) {
         if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2025") {
             return res.status(404).json({ error: "User not found." });

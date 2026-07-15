@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import session from "express-session";
 import { prisma } from "../../prisma.js";
 import { Prisma } from "../../generated/prisma/client.js";
 import { createAuthenticatedAgent } from "../helpers.js";
@@ -60,7 +61,8 @@ describe("users routes - unexpected database errors fall through to the generic 
   });
 
   it("DELETE /:id returns 500 on an unexpected database error", async () => {
-    vi.spyOn(prisma.user, "delete").mockRejectedValueOnce(new Error("db down"));
+    // DELETE is a soft delete under the hood - it calls prisma.user.update.
+    vi.spyOn(prisma.user, "update").mockRejectedValueOnce(new Error("db down"));
     const response = await agent.delete(`/users/${userId}`);
     expect(response.status).toBe(500);
   });
@@ -74,10 +76,18 @@ describe("users routes - unexpected database errors fall through to the generic 
   });
 
   it("DELETE /:id returns 404 if the row was already deleted (race condition)", async () => {
-    vi.spyOn(prisma.user, "delete").mockRejectedValueOnce(
+    vi.spyOn(prisma.user, "update").mockRejectedValueOnce(
       new Prisma.PrismaClientKnownRequestError("Record not found", { code: "P2025", clientVersion: "test" })
     );
     const response = await agent.delete(`/users/${userId}`);
     expect(response.status).toBe(404);
+  });
+
+  it("DELETE /:id returns 500 if the session fails to be destroyed after the soft delete", async () => {
+    vi.spyOn(session.Session.prototype, "destroy").mockImplementationOnce(function (this: any, callback: any) {
+      callback(new Error("session store down"));
+    });
+    const response = await agent.delete(`/users/${userId}`);
+    expect(response.status).toBe(500);
   });
 });

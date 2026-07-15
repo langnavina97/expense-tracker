@@ -1,7 +1,12 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vitest";
 import request from "supertest";
 import { app } from "../app.js";
+import { prisma } from "../prisma.js";
 import { createAuthenticatedAgent } from "./helpers.js";
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 describe("GET /health", () => {
   it("returns OK", async () => {
@@ -26,5 +31,18 @@ describe("requireAuth", () => {
     const response = await agent.get("/expenses");
 
     expect(response.status).toBe(200);
+  });
+
+  it("rejects a session whose user was deleted through another path (soft delete)", async () => {
+    const { agent, userId } = await createAuthenticatedAgent();
+
+    vi.spyOn(prisma.user, "findUnique").mockResolvedValueOnce({
+      id: userId,
+      deletedAt: new Date(),
+    } as any);
+
+    const response = await agent.get("/expenses");
+
+    expect(response.status).toBe(401);
   });
 });

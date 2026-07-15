@@ -28,7 +28,7 @@ export async function requireAuth(req: express.Request, res: express.Response, n
   }
 
   const currentUser = await prisma.user.findUnique({ where: { id: req.session.userId } });
-  if (!currentUser) {
+  if (!currentUser || currentUser.deletedAt) {
     return res.status(401).json({ error: "Authentication required." });
   }
 
