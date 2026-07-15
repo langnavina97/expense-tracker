@@ -23,7 +23,7 @@ export function Layout() {
         <div className="topbar-user">
           {currentUser && (
             <span>
-              {currentUser.name} <span className="user-id-tag">(ID: {currentUser.id})</span>
+              {currentUser.name} <span className="user-id-tag">#{currentUser.id}</span>
             </span>
           )}
           <button className="btn-ghost btn-small" onClick={() => logout()}>

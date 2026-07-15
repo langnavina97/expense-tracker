@@ -4,7 +4,7 @@ import { useAuth } from "../context/AuthContext";
 import { api, ApiError } from "../api";
 
 export function OnboardingPage() {
-  const { refresh } = useAuth();
+  const { currentUser, refresh } = useAuth();
   const navigate = useNavigate();
   const [name, setName] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -49,6 +49,15 @@ export function OnboardingPage() {
           {submitting ? "Creating…" : "Create household"}
         </button>
       </form>
+
+      <div className="divider-text" style={{ margin: "18px 0" }}>
+        or
+      </div>
+
+      <p style={{ fontSize: "0.85rem" }}>
+        Being added to someone else's household instead? You don't need to do anything here - just share your user
+        ID with them: <strong>#{currentUser?.id}</strong>. You'll get access automatically once they add you.
+      </p>
     </div>
   );
 }
