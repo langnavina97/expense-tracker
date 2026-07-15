@@ -206,6 +206,7 @@ router.delete("/:id", requireValidId, async (req, res, next) => {
                 email: `deleted-user-${id}@deleted.invalid`,
                 name: "Deleted User",
                 passwordHash: "",
+                googleId: null,
             },
         });
 

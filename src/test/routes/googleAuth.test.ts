@@ -171,6 +171,26 @@ describe("GET /auth/google/callback", () => {
     expect(secondMe.body.googleId).toBe("google-sub-returning");
   });
 
+  it("frees up the Google identity for reuse after the account is soft-deleted", async () => {
+    const first = await startFlow();
+    mockGoogleUser({ email: "reusable@example.com", sub: "google-sub-reusable" });
+    await first.agent.get("/auth/google/callback").query({ code: "abc", state: first.state });
+    const firstMe = await first.agent.get("/users/me");
+
+    await first.agent.delete(`/users/${firstMe.body.id}`);
+
+    const second = await startFlow();
+    mockGoogleUser({ email: "reusable@example.com", sub: "google-sub-reusable" });
+    const response = await second.agent.get("/auth/google/callback").query({ code: "abc", state: second.state });
+
+    expect(response.status).toBe(302);
+    expect(response.headers.location).toBe("/");
+
+    const secondMe = await second.agent.get("/users/me");
+    expect(secondMe.body.id).not.toBe(firstMe.body.id);
+    expect(secondMe.body.googleId).toBe("google-sub-reusable");
+  });
+
   it("rejects a login for a soft-deleted account", async () => {
     // The API's own DELETE anonymizes the email away, so a soft-deleted
     // account can never be matched by email through the public API alone -
