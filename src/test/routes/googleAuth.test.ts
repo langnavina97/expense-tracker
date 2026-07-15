@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vitest";
 import request from "supertest";
 import { prisma } from "../../prisma.js";
 
@@ -57,47 +57,52 @@ describe("GET /auth/google", () => {
 });
 
 describe("GET /auth/google/callback", () => {
-  it("fails with 400 if state is missing", async () => {
+  it("redirects to /login?error=oauth_state if state is missing", async () => {
     const { agent } = await startFlow();
 
     const response = await agent.get("/auth/google/callback").query({ code: "abc" });
 
-    expect(response.status).toBe(400);
+    expect(response.status).toBe(302);
+    expect(response.headers.location).toBe("/login?error=oauth_state");
   });
 
-  it("fails with 400 if state doesn't match the session's", async () => {
+  it("redirects to /login?error=oauth_state if state doesn't match the session's", async () => {
     const { agent } = await startFlow();
 
     const response = await agent.get("/auth/google/callback").query({ code: "abc", state: "wrong-state" });
 
-    expect(response.status).toBe(400);
+    expect(response.status).toBe(302);
+    expect(response.headers.location).toBe("/login?error=oauth_state");
   });
 
-  it("fails with 400 if code is missing", async () => {
+  it("redirects to /login?error=oauth_code if code is missing", async () => {
     const { agent, state } = await startFlow();
 
     const response = await agent.get("/auth/google/callback").query({ state });
 
-    expect(response.status).toBe(400);
+    expect(response.status).toBe(302);
+    expect(response.headers.location).toBe("/login?error=oauth_code");
   });
 
-  it("fails with 400 if Google doesn't return an identity token", async () => {
+  it("redirects to /login?error=oauth_token if Google doesn't return an identity token", async () => {
     const { agent, state } = await startFlow();
     getTokenMock.mockResolvedValueOnce({ tokens: {} });
 
     const response = await agent.get("/auth/google/callback").query({ code: "abc", state });
 
-    expect(response.status).toBe(400);
+    expect(response.status).toBe(302);
+    expect(response.headers.location).toBe("/login?error=oauth_token");
   });
 
-  it("fails with 400 if the verified token has no email", async () => {
+  it("redirects to /login?error=oauth_email if the verified token has no email", async () => {
     const { agent, state } = await startFlow();
     getTokenMock.mockResolvedValueOnce({ tokens: { id_token: "fake-id-token" } });
     verifyIdTokenMock.mockResolvedValueOnce({ getPayload: () => ({ sub: "google-sub-123" }) });
 
     const response = await agent.get("/auth/google/callback").query({ code: "abc", state });
 
-    expect(response.status).toBe(400);
+    expect(response.status).toBe(302);
+    expect(response.headers.location).toBe("/login?error=oauth_email");
   });
 
   it("creates a new user on first Google login and logs them in", async () => {
@@ -106,14 +111,15 @@ describe("GET /auth/google/callback", () => {
 
     const response = await agent.get("/auth/google/callback").query({ code: "abc", state });
 
-    expect(response.status).toBe(200);
-    expect(response.body).toMatchObject({ email: "newgoogleuser@example.com", name: "New Google User" });
-    expect(response.body.googleId).toBe("google-sub-123");
-    expect(response.body.passwordHash).toBeUndefined();
+    expect(response.status).toBe(302);
+    expect(response.headers.location).toBe("/");
 
-    // Confirm the session was actually established.
-    const usersResponse = await agent.get("/users");
-    expect(usersResponse.status).toBe(200);
+    // Confirm the session was actually established, with the right user.
+    const me = await agent.get("/users/me");
+    expect(me.status).toBe(200);
+    expect(me.body).toMatchObject({ email: "newgoogleuser@example.com", name: "New Google User" });
+    expect(me.body.googleId).toBe("google-sub-123");
+    expect(me.body.passwordHash).toBeUndefined();
   });
 
   it("falls back to the email as the name when Google doesn't provide one", async () => {
@@ -124,9 +130,10 @@ describe("GET /auth/google/callback", () => {
     });
 
     const response = await agent.get("/auth/google/callback").query({ code: "abc", state });
+    expect(response.status).toBe(302);
 
-    expect(response.status).toBe(200);
-    expect(response.body.name).toBe("noname@example.com");
+    const me = await agent.get("/users/me");
+    expect(me.body.name).toBe("noname@example.com");
   });
 
   it("links an existing password-based account with the same email instead of duplicating it", async () => {
@@ -141,26 +148,27 @@ describe("GET /auth/google/callback", () => {
     mockGoogleUser({ email: "existing@example.com" });
 
     const response = await agent.get("/auth/google/callback").query({ code: "abc", state });
+    expect(response.status).toBe(302);
+    expect(response.headers.location).toBe("/");
 
-    expect(response.status).toBe(200);
-    expect(response.body.id).toBe(registerResponse.body.id);
-    expect(response.body.googleId).toBe("google-sub-123");
+    const me = await agent.get("/users/me");
+    expect(me.body.id).toBe(registerResponse.body.id);
+    expect(me.body.googleId).toBe("google-sub-123");
   });
 
   it("logs an already-linked Google account back in without re-updating it", async () => {
     const first = await startFlow();
     mockGoogleUser({ email: "returning@example.com", sub: "google-sub-returning" });
-    const firstResponse = await first.agent.get("/auth/google/callback").query({ code: "abc", state: first.state });
+    await first.agent.get("/auth/google/callback").query({ code: "abc", state: first.state });
+    const firstMe = await first.agent.get("/users/me");
 
     const second = await startFlow();
     mockGoogleUser({ email: "returning@example.com", sub: "google-sub-returning" });
-    const secondResponse = await second.agent
-      .get("/auth/google/callback")
-      .query({ code: "abc", state: second.state });
+    await second.agent.get("/auth/google/callback").query({ code: "abc", state: second.state });
+    const secondMe = await second.agent.get("/users/me");
 
-    expect(secondResponse.status).toBe(200);
-    expect(secondResponse.body.id).toBe(firstResponse.body.id);
-    expect(secondResponse.body.googleId).toBe("google-sub-returning");
+    expect(secondMe.body.id).toBe(firstMe.body.id);
+    expect(secondMe.body.googleId).toBe("google-sub-returning");
   });
 
   it("rejects a login for a soft-deleted account", async () => {
@@ -182,16 +190,18 @@ describe("GET /auth/google/callback", () => {
 
     const response = await agent.get("/auth/google/callback").query({ code: "abc", state });
 
-    expect(response.status).toBe(401);
+    expect(response.status).toBe(302);
+    expect(response.headers.location).toBe("/login?error=account_unavailable");
   });
 
-  it("returns 500 on an unexpected error", async () => {
+  it("redirects to /login?error=server_error on an unexpected error", async () => {
     const { agent, state } = await startFlow();
     getTokenMock.mockRejectedValueOnce(new Error("network down"));
 
     const response = await agent.get("/auth/google/callback").query({ code: "abc", state });
 
-    expect(response.status).toBe(500);
+    expect(response.status).toBe(302);
+    expect(response.headers.location).toBe("/login?error=server_error");
   });
 });
 
@@ -206,6 +216,20 @@ describe("module load", () => {
     );
 
     process.env.GOOGLE_CLIENT_ID = original;
+    vi.resetModules();
+  });
+
+  it("defaults FRONTEND_URL to same-origin when unset", async () => {
+    const original = process.env.FRONTEND_URL;
+    delete process.env.FRONTEND_URL;
+    vi.resetModules();
+
+    const { app: freshApp } = await import("../../app.js");
+    const response = await request(freshApp).get("/auth/google/callback").query({ code: "abc" });
+
+    expect(response.headers.location).toBe("/login?error=oauth_state");
+
+    if (original !== undefined) process.env.FRONTEND_URL = original;
     vi.resetModules();
   });
 });

@@ -82,6 +82,32 @@ describe("users routes", () => {
     expect(noSuchUser.body.error).toBe(wrongPassword.body.error);
   });
 
+  it("GET /users/me returns the current user without leaking passwordHash", async () => {
+    const agent = await registerAndLogin(validUser);
+
+    const response = await agent.get("/users/me");
+
+    expect(response.status).toBe(200);
+    expect(response.body).toMatchObject({ name: "Test User", email: "test@example.com" });
+    expect(response.body.passwordHash).toBeUndefined();
+  });
+
+  it("GET /users/me fails when not logged in", async () => {
+    const response = await request(app).get("/users/me");
+
+    expect(response.status).toBe(401);
+  });
+
+  it("POST /users/logout ends the session", async () => {
+    const agent = await registerAndLogin(validUser);
+
+    const logoutResponse = await agent.post("/users/logout");
+    expect(logoutResponse.status).toBe(200);
+
+    const meResponse = await agent.get("/users/me");
+    expect(meResponse.status).toBe(401);
+  });
+
   it("GET /users lists users without leaking passwordHash", async () => {
     const agent = await registerAndLogin(validUser);
 

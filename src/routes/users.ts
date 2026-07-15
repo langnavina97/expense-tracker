@@ -98,6 +98,19 @@ router.post("/login", async (req, res, next) => {
 // Every route below this point requires a logged-in user.
 router.use(requireAuth);
 
+// Lets the frontend ask "who am I?" on load to bootstrap auth state, without
+// guessing at an id from a list of household members.
+router.get("/me", (req, res) => {
+  res.status(200).json(res.locals.currentUser);
+});
+
+router.post("/logout", (req, res, next) => {
+  req.session.destroy((err) => {
+    if (err) return next(err);
+    res.status(200).json({ message: "Logged out successfully." });
+  });
+});
+
 router.get("/", async (req, res, next) => {
   try {
     // Only ever list users within the current user's own household - a user

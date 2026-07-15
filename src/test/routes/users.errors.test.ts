@@ -90,4 +90,12 @@ describe("users routes - unexpected database errors fall through to the generic 
     const response = await agent.delete(`/users/${userId}`);
     expect(response.status).toBe(500);
   });
+
+  it("POST /logout returns 500 if the session fails to be destroyed", async () => {
+    vi.spyOn(session.Session.prototype, "destroy").mockImplementationOnce(function (this: any, callback: any) {
+      callback(new Error("session store down"));
+    });
+    const response = await agent.post("/users/logout");
+    expect(response.status).toBe(500);
+  });
 });

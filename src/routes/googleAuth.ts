@@ -13,6 +13,17 @@ if (!CLIENT_ID || !CLIENT_SECRET || !REDIRECT_URI) {
 
 const client = new OAuth2Client(CLIENT_ID, CLIENT_SECRET, REDIRECT_URI);
 
+// The callback below is hit by a real browser navigation (Google redirects
+// here directly), not a frontend fetch call - so every outcome, success or
+// failure, has to end in an HTTP redirect back into the frontend rather than
+// a JSON response. Defaults to "/" for production, where Express serves the
+// built frontend from the same origin as the API.
+const FRONTEND_URL = process.env.FRONTEND_URL || "/";
+
+function redirectToFrontend(res: import("express").Response, path: string) {
+  res.redirect(`${FRONTEND_URL.replace(/\/$/, "")}${path}`);
+}
+
 const router = Router();
 
 // Step 1: send the browser to Google's consent screen. A random `state`
@@ -34,22 +45,22 @@ router.get("/google", (req, res) => {
 // Step 2: Google redirects the browser back here with a one-time code (and
 // the same state we sent). Exchange the code for tokens, verify the identity
 // token's signature, then find-or-create the User and log them in.
-router.get("/google/callback", async (req, res, next) => {
+router.get("/google/callback", async (req, res) => {
   const { code, state } = req.query;
 
   if (!state || state !== req.session.oauthState) {
-    return res.status(400).json({ error: "Invalid OAuth state." });
+    return redirectToFrontend(res, "/login?error=oauth_state");
   }
   delete req.session.oauthState;
 
   if (typeof code !== "string") {
-    return res.status(400).json({ error: "Missing authorization code." });
+    return redirectToFrontend(res, "/login?error=oauth_code");
   }
 
   try {
     const { tokens } = await client.getToken(code);
     if (!tokens.id_token) {
-      return res.status(400).json({ error: "Google did not return an identity token." });
+      return redirectToFrontend(res, "/login?error=oauth_token");
     }
 
     const ticket = await client.verifyIdToken({
@@ -59,7 +70,7 @@ router.get("/google/callback", async (req, res, next) => {
 
     const payload = ticket.getPayload();
     if (!payload?.email) {
-      return res.status(400).json({ error: "Google account has no email." });
+      return redirectToFrontend(res, "/login?error=oauth_email");
     }
 
     let user = await prisma.user.findUnique({ where: { email: payload.email } });
@@ -83,16 +94,15 @@ router.get("/google/callback", async (req, res, next) => {
     }
 
     if (user.deletedAt) {
-      return res.status(401).json({ error: "Account not available." });
+      return redirectToFrontend(res, "/login?error=account_unavailable");
     }
 
     req.session.userId = user.id;
 
-    // passwordHash is already excluded here - the global Prisma omit applies
-    // by default, and we never overrode it for these queries.
-    res.status(200).json(user);
+    redirectToFrontend(res, "/");
   } catch (error) {
-    next(error);
+    console.error(error);
+    redirectToFrontend(res, "/login?error=server_error");
   }
 });
 

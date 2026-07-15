@@ -7,7 +7,7 @@
     "test": "dotenv -e .env.test -- vitest run",
     "test:coverage": "dotenv -e .env.test -- vitest run --coverage",
     "dev": "tsx watch src/index.ts",
-    "build": "prisma generate && tsc",
+    "build": "npm --prefix frontend ci && npm --prefix frontend run build && prisma generate && tsc",
     "start": "node dist/index.js"
   },
   "repository": {
