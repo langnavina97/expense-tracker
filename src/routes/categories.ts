@@ -35,11 +35,17 @@ router.post("/", async (req, res, next) => {
         return res.status(400).json({ error: validationError });
     }
 
+    const { householdId } = res.locals.currentUser;
+    if (!householdId) {
+        return res.status(400).json({ error: "You must belong to a household to create a category." });
+    }
+
     try {
         // Create a new category record in the database using Prisma.
         const newCategory = await prisma.category.create({
             data: {
                 name,
+                household: { connect: { id: householdId } },
             },
         });
 
@@ -55,9 +61,12 @@ router.post("/", async (req, res, next) => {
 
 router.get("/", async (req, res, next) => {
   try {
-    // Fetch all category records from the database using Prisma.
-    const categories = await prisma.category.findMany();
-    
+    // Only list categories belonging to the current user's household.
+    const { householdId } = res.locals.currentUser;
+    const categories = householdId
+      ? await prisma.category.findMany({ where: { householdId } })
+      : [];
+
     // Respond with the list of categories.
     res.status(200).json(categories);
   } catch (error) {
@@ -74,7 +83,7 @@ router.get("/:id", requireValidId, async (req, res, next) => {
       where: { id },
     });
 
-    if (!category) {
+    if (!category || category.householdId !== res.locals.currentUser.householdId) {
       return res.status(404).json({ error: "Category not found." });
     }
 
@@ -95,6 +104,11 @@ router.patch("/:id", requireValidId, async (req, res, next) => {
     }
 
     try {
+        const existingCategory = await prisma.category.findUnique({ where: { id } });
+        if (!existingCategory || existingCategory.householdId !== res.locals.currentUser.householdId) {
+            return res.status(404).json({ error: "Category not found." });
+        }
+
         // Update the category record in the database using Prisma.
         const updatedCategory = await prisma.category.update({
             where: { id },
@@ -118,6 +132,11 @@ router.delete("/:id", requireValidId, async (req, res, next) => {
     const id = res.locals.id;
 
     try {
+        const existingCategory = await prisma.category.findUnique({ where: { id } });
+        if (!existingCategory || existingCategory.householdId !== res.locals.currentUser.householdId) {
+            return res.status(404).json({ error: "Category not found." });
+        }
+
         // Delete the category record from the database using Prisma.
         await prisma.category.delete({
             where: { id },

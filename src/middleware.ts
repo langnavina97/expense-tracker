@@ -1,4 +1,6 @@
 import express from "express";
+import { prisma } from "./prisma.js";
+import type { User } from "./generated/prisma/client.js";
 
 // Returns a valid integer id, or null if rawId is missing/not one.
 export function parseId(rawId: string | string[] | undefined): number | null {
@@ -18,11 +20,29 @@ export function requireValidId(req: express.Request, res: express.Response, next
 }
 
 // Route-specific middleware: requires an active session, or short-circuits with 401.
-export function requireAuth(req: express.Request, res: express.Response, next: express.NextFunction) {
+// Also fetches the full current user (household, role) and attaches it to
+// res.locals.currentUser, so routes don't each repeat the same lookup.
+export async function requireAuth(req: express.Request, res: express.Response, next: express.NextFunction) {
   if (!req.session.userId) {
     return res.status(401).json({ error: "Authentication required." });
   }
+
+  const currentUser = await prisma.user.findUnique({ where: { id: req.session.userId } });
+  if (!currentUser) {
+    return res.status(401).json({ error: "Authentication required." });
+  }
+
+  res.locals.currentUser = currentUser;
   next();
+}
+
+declare module "express-serve-static-core" {
+  interface Locals {
+    // passwordHash is globally omitted by the prisma client (see prisma.ts),
+    // so it's never actually present on what findUnique returns here.
+    currentUser: Omit<User, "passwordHash">;
+    id: number;
+  }
 }
 
 // Error-handling middleware (4 args = how Express identifies it). Registered last, after all routes.

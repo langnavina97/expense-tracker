@@ -1,8 +1,6 @@
 // This is your Prisma schema file,
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
 
-// Get a free hosted Postgres database in seconds: `npx create-db`
-
 generator client {
   provider = "prisma-client"
   output   = "../src/generated/prisma"
@@ -12,27 +10,72 @@ datasource db {
   provider = "postgresql"
 }
 
-model Category {
-  id Int @id @default(autoincrement())
-  name String @unique
-  expenses Expense[]
+enum Role {
+  LEAD
+  ADULT
+  CHILD
 }
 
-model Expense {
-  id Int @id @default(autoincrement())
-  title String
-  categoryId Int
-  category Category @relation(fields: [categoryId], references: [id])
-  spender String
-  currency String
-  amount Int
-  convertedAmount Int? // TODO: populate via exchange-rate API conversion
-  date DateTime @db.Date
+model Household {
+  id         Int         @id @default(autoincrement())
+  name       String
+  members    User[]
+  dependents Dependent[]
+  categories Category[]
+  expenses   Expense[]
 }
 
 model User {
-  id Int @id @default(autoincrement())
-  email String @unique
-  name String
-  passwordHash String
+  id              Int        @id @default(autoincrement())
+  email           String     @unique
+  name            String
+  passwordHash    String
+  householdId     Int?
+  household       Household? @relation(fields: [householdId], references: [id])
+  role            Role?
+  spenderId       Int        @unique
+  spender         Spender    @relation(fields: [spenderId], references: [id])
+  createdExpenses Expense[]  @relation("CreatedExpenses")
+}
+
+model Dependent {
+  id          Int       @id @default(autoincrement())
+  name        String
+  householdId Int
+  household   Household @relation(fields: [householdId], references: [id])
+  spenderId   Int       @unique
+  spender     Spender   @relation(fields: [spenderId], references: [id])
+}
+
+model Spender {
+  id        Int        @id @default(autoincrement())
+  user      User?
+  dependent Dependent?
+  expenses  Expense[]
+}
+
+model Category {
+  id          Int       @id @default(autoincrement())
+  name        String
+  householdId Int
+  household   Household @relation(fields: [householdId], references: [id])
+  expenses    Expense[]
+
+  @@unique([householdId, name])
+}
+
+model Expense {
+  id              Int       @id @default(autoincrement())
+  title           String
+  categoryId      Int
+  category        Category  @relation(fields: [categoryId], references: [id])
+  currency        String
+  amount          Int
+  convertedAmount Int? // TODO: populate via exchange-rate API conversion
+  date            DateTime  @db.Date
+  spenders        Spender[]
+  createdByUserId Int
+  createdBy       User      @relation("CreatedExpenses", fields: [createdByUserId], references: [id])
+  householdId     Int
+  household       Household @relation(fields: [householdId], references: [id])
 }

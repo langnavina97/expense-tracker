@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { prisma } from "../prisma.js";
 import { requireValidId, requireAuth } from "../middleware.js";
-import { Prisma } from "../generated/prisma/client.js";
+import { Prisma, Role } from "../generated/prisma/client.js";
 
 import { getExchangeRate } from "../exchangeRate.js";
 
@@ -13,10 +13,15 @@ export function validateExpenseInput(
   body: any,
   { partial }: { partial: boolean }
 ): string | null {
-  const { categoryId, spender, currency, amount, date } = body;
+  const { categoryId, spenderIds, currency, amount, date } = body;
+  const spenderIdsMissing = !Array.isArray(spenderIds) || spenderIds.length === 0;
 
-  if (!partial && (!spender || !currency || amount == null || !date || categoryId == null)) {
-    return "categoryId, spender, currency, amount, and date are required.";
+  if (!partial && (spenderIdsMissing || !currency || amount == null || !date || categoryId == null)) {
+    return "categoryId, spenderIds, currency, amount, and date are required.";
+  }
+
+  if (partial && spenderIds !== undefined && spenderIdsMissing) {
+    return "spenderIds must be a non-empty array.";
   }
 
   if (currency !== undefined && !SUPPORTED_CURRENCIES.includes(currency)) {
@@ -26,17 +31,56 @@ export function validateExpenseInput(
   return null;
 }
 
+// Confirms every given Spender id exists and belongs to the given household.
+// Returns an error message, or null if all valid.
+async function validateSpenderIds(spenderIds: number[], householdId: number): Promise<string | null> {
+  const spenders = await prisma.spender.findMany({
+    where: { id: { in: spenderIds } },
+    include: { user: true, dependent: true },
+  });
+
+  if (spenders.length !== spenderIds.length) {
+    return "One or more spenderIds do not exist.";
+  }
+
+  const allInHousehold = spenders.every(
+    (s) => s.user?.householdId === householdId || s.dependent?.householdId === householdId
+  );
+
+  if (!allInHousehold) {
+    return "One or more spenderIds do not belong to your household.";
+  }
+
+  return null;
+}
+
+// Only the household lead/adult who created an expense, or the person who
+// created it, may modify it - a CHILD may only touch their own expenses.
+function canModifyExpense(currentUser: { id: number; role: Role | null }, expense: { createdByUserId: number }) {
+  return currentUser.role !== Role.CHILD || expense.createdByUserId === currentUser.id;
+}
+
 const router = Router();
 
 // Every expense route requires a logged-in user.
 router.use(requireAuth);
 
 router.post("/", async (req, res, next) => {
-  const { title, categoryId, spender, currency, amount, convertedAmount, date } = req.body;
+  const { title, categoryId, spenderIds, currency, amount, date } = req.body;
+  const { currentUser } = res.locals;
 
   const validationError = validateExpenseInput(req.body, { partial: false });
   if (validationError) {
     return res.status(400).json({ error: validationError });
+  }
+
+  if (!currentUser.householdId) {
+    return res.status(400).json({ error: "You must belong to a household to create an expense." });
+  }
+
+  const spenderError = await validateSpenderIds(spenderIds, currentUser.householdId);
+  if (spenderError) {
+    return res.status(400).json({ error: spenderError });
   }
 
   try {
@@ -45,7 +89,9 @@ router.post("/", async (req, res, next) => {
       data: {
         title,
         category: { connect: { id: categoryId } },
-        spender,
+        household: { connect: { id: currentUser.householdId } },
+        createdBy: { connect: { id: currentUser.id } },
+        spenders: { connect: spenderIds.map((id: number) => ({ id })) },
         currency,
         amount,
         convertedAmount: await getExchangeRate(currency, "USD", amount), // Convert to USD using the exchange rate function
@@ -65,8 +111,11 @@ router.post("/", async (req, res, next) => {
 
 router.get("/", async (req, res, next) => {
   try {
-    // Fetch all expense records from the database using Prisma.
-    const expenses = await prisma.expense.findMany();
+    // Only list expenses belonging to the current user's household.
+    const { householdId } = res.locals.currentUser;
+    const expenses = householdId
+      ? await prisma.expense.findMany({ where: { householdId }, include: { spenders: true } })
+      : [];
 
     // Respond with the list of expenses.
     res.status(200).json(expenses);
@@ -82,9 +131,10 @@ router.get("/:id", requireValidId, async (req, res, next) => {
     // Fetch a specific expense record by ID from the database using Prisma.
     const expense = await prisma.expense.findUnique({
       where: { id },
+      include: { spenders: true },
     });
 
-    if (!expense) {
+    if (!expense || expense.householdId !== res.locals.currentUser.householdId) {
       return res.status(404).json({ error: "Expense not found." });
     }
 
@@ -97,7 +147,8 @@ router.get("/:id", requireValidId, async (req, res, next) => {
 
 router.patch("/:id", requireValidId, async (req, res, next) => {
   const id = res.locals.id;
-  const { title, categoryId, spender, currency, amount, convertedAmount, date } = req.body;
+  const { title, categoryId, spenderIds, currency, amount, date } = req.body;
+  const { currentUser } = res.locals;
 
   const validationError = validateExpenseInput(req.body, { partial: true });
   if (validationError) {
@@ -106,8 +157,19 @@ router.patch("/:id", requireValidId, async (req, res, next) => {
 
   try {
     const existingExpense = await prisma.expense.findUnique({ where: { id } });
-    if (!existingExpense) {
+    if (!existingExpense || existingExpense.householdId !== currentUser.householdId) {
       return res.status(404).json({ error: "Expense not found." });
+    }
+
+    if (!canModifyExpense(currentUser, existingExpense)) {
+      return res.status(403).json({ error: "You can only modify expenses you created." });
+    }
+
+    if (spenderIds !== undefined) {
+      const spenderError = await validateSpenderIds(spenderIds, currentUser.householdId);
+      if (spenderError) {
+        return res.status(400).json({ error: spenderError });
+      }
     }
 
     const effectiveCurrency = currency ?? existingExpense.currency;
@@ -119,7 +181,9 @@ router.patch("/:id", requireValidId, async (req, res, next) => {
       data: {
         title,
         ...(categoryId != null && { category: { connect: { id: categoryId } } }),
-        spender,
+        ...(spenderIds !== undefined && {
+          spenders: { set: spenderIds.map((sid: number) => ({ id: sid })) },
+        }),
         currency,
         amount,
         ...((currency !== undefined || amount !== undefined) && {
@@ -141,8 +205,18 @@ router.patch("/:id", requireValidId, async (req, res, next) => {
 
 router.delete("/:id", requireValidId, async (req, res, next) => {
   const id = res.locals.id;
+  const { currentUser } = res.locals;
 
   try {
+    const existingExpense = await prisma.expense.findUnique({ where: { id } });
+    if (!existingExpense || existingExpense.householdId !== currentUser.householdId) {
+      return res.status(404).json({ error: "Expense not found." });
+    }
+
+    if (!canModifyExpense(currentUser, existingExpense)) {
+      return res.status(403).json({ error: "You can only delete expenses you created." });
+    }
+
     // Delete a specific expense record by ID from the database using Prisma.
     await prisma.expense.delete({
       where: { id },

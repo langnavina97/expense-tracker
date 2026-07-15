@@ -3,7 +3,7 @@ import { validateExpenseInput } from "../../routes/expenses.js";
 
 const validBody = {
   categoryId: 1,
-  spender: "you",
+  spenderIds: [1],
   currency: "USD",
   amount: 1500,
   date: "2026-07-08",
@@ -15,9 +15,13 @@ describe("validateExpenseInput", () => {
       expect(validateExpenseInput(validBody, { partial: false })).toBeNull();
     });
 
-    it("fails when spender is missing", () => {
-      const { spender, ...rest } = validBody;
+    it("fails when spenderIds is missing", () => {
+      const { spenderIds, ...rest } = validBody;
       expect(validateExpenseInput(rest, { partial: false })).not.toBeNull();
+    });
+
+    it("fails when spenderIds is an empty array", () => {
+      expect(validateExpenseInput({ ...validBody, spenderIds: [] }, { partial: false })).not.toBeNull();
     });
 
     it("fails when categoryId is missing", () => {
@@ -47,6 +51,10 @@ describe("validateExpenseInput", () => {
 
     it("passes when only one field is provided", () => {
       expect(validateExpenseInput({ amount: 2000 }, { partial: true })).toBeNull();
+    });
+
+    it("fails when spenderIds is explicitly provided as an empty array", () => {
+      expect(validateExpenseInput({ spenderIds: [] }, { partial: true })).not.toBeNull();
     });
 
     it("still rejects an unsupported currency if one is provided", () => {

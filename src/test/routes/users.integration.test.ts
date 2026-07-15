@@ -111,6 +111,19 @@ describe("users routes", () => {
     expect(response.status).toBe(404);
   });
 
+  it("GET /users/:id returns 404 for a user in a different household", async () => {
+    const agent = await registerAndLogin(validUser);
+    await agent.post("/households").send({ name: "My Household" });
+
+    const other = await registerAndLogin({ ...validUser, email: "other-household@example.com" });
+    await other.post("/households").send({ name: "Other Household" });
+    const otherUser = await other.get("/users").then((r) => r.body[0]);
+
+    const response = await agent.get(`/users/${otherUser.id}`);
+
+    expect(response.status).toBe(404);
+  });
+
   it("PATCH /users/:id updates the name", async () => {
     const agent = await registerAndLogin(validUser);
     const me = await agent.get("/users").then((r) => r.body[0]);
@@ -130,12 +143,12 @@ describe("users routes", () => {
     expect(response.status).toBe(400);
   });
 
-  it("PATCH /users/:id returns 404 for a nonexistent id", async () => {
+  it("PATCH /users/:id returns 403 for any id other than your own", async () => {
     const agent = await registerAndLogin(validUser);
 
     const response = await agent.patch("/users/999999").send({ name: "Someone" });
 
-    expect(response.status).toBe(404);
+    expect(response.status).toBe(403);
   });
 
   it("PATCH /users/:id fails renaming email to one that already exists", async () => {
@@ -149,22 +162,24 @@ describe("users routes", () => {
     expect(response.status).toBe(409);
   });
 
-  it("DELETE /users/:id removes the user", async () => {
+  it("DELETE /users/:id removes the user, invalidating their own session", async () => {
     const agent = await registerAndLogin(validUser);
     const me = await agent.get("/users").then((r) => r.body[0]);
 
     const deleteResponse = await agent.delete(`/users/${me.id}`);
     expect(deleteResponse.status).toBe(200);
 
+    // The session's userId no longer resolves to a real user, so requireAuth
+    // now correctly rejects it as unauthenticated, not "not found".
     const getResponse = await agent.get(`/users/${me.id}`);
-    expect(getResponse.status).toBe(404);
+    expect(getResponse.status).toBe(401);
   });
 
-  it("DELETE /users/:id returns 404 for a nonexistent id", async () => {
+  it("DELETE /users/:id returns 403 for any id other than your own", async () => {
     const agent = await registerAndLogin(validUser);
 
     const response = await agent.delete("/users/999999");
 
-    expect(response.status).toBe(404);
+    expect(response.status).toBe(403);
   });
 });

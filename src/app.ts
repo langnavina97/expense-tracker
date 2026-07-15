@@ -4,6 +4,7 @@ import { errorHandler } from "./middleware.js";
 import expensesRouter from "./routes/expenses.js";
 import categoriesRouter from "./routes/categories.js";
 import usersRouter from "./routes/users.js";
+import householdsRouter from "./routes/households.js";
 
 // Create an instance of the Express application, representing the server.
 export const app = express();
@@ -35,5 +36,7 @@ app.use("/expenses", expensesRouter);
 app.use("/categories", categoriesRouter);
 
 app.use("/users", usersRouter);
+
+app.use("/households", householdsRouter);
 
 app.use(errorHandler);

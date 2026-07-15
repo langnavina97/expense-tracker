@@ -21,7 +21,7 @@ describe("requireAuth", () => {
   });
 
   it("allows a request to a protected route once authenticated", async () => {
-    const agent = await createAuthenticatedAgent();
+    const { agent } = await createAuthenticatedAgent();
 
     const response = await agent.get("/expenses");
 

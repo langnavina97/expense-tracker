@@ -1,11 +1,12 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import request from "supertest";
+import { app } from "../../app.js";
 import { createAuthenticatedAgent } from "../helpers.js";
 
-let agent: Awaited<ReturnType<typeof createAuthenticatedAgent>>;
+let agent: Awaited<ReturnType<typeof createAuthenticatedAgent>>["agent"];
 
 beforeEach(async () => {
-  agent = await createAuthenticatedAgent();
+  ({ agent } = await createAuthenticatedAgent());
 });
 
 describe("categories routes", () => {
@@ -15,6 +16,23 @@ describe("categories routes", () => {
     expect(response.status).toBe(201);
     expect(response.body).toMatchObject({ name: "Food" });
     expect(response.body.id).toBeTypeOf("number");
+  });
+
+  it("POST /categories fails if the caller doesn't belong to a household", async () => {
+    const noHouseholdAgent = request.agent(app);
+    await noHouseholdAgent.post("/users").send({
+      name: "No Household",
+      email: "no-household@example.com",
+      password: "correcthorsebatterystaple",
+    });
+    await noHouseholdAgent.post("/users/login").send({
+      email: "no-household@example.com",
+      password: "correcthorsebatterystaple",
+    });
+
+    const response = await noHouseholdAgent.post("/categories").send({ name: "Food" });
+
+    expect(response.status).toBe(400);
   });
 
   it("POST /categories fails without a name", async () => {
@@ -28,6 +46,24 @@ describe("categories routes", () => {
     const response = await agent.post("/categories").send({ name: "Food" });
 
     expect(response.status).toBe(409);
+  });
+
+  it("GET /categories returns an empty array if the caller doesn't belong to a household", async () => {
+    const noHouseholdAgent = request.agent(app);
+    await noHouseholdAgent.post("/users").send({
+      name: "No Household",
+      email: "no-household-get@example.com",
+      password: "correcthorsebatterystaple",
+    });
+    await noHouseholdAgent.post("/users/login").send({
+      email: "no-household-get@example.com",
+      password: "correcthorsebatterystaple",
+    });
+
+    const response = await noHouseholdAgent.get("/categories");
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual([]);
   });
 
   it("GET /categories lists created categories", async () => {

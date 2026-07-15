@@ -41,12 +41,14 @@ router.post("/", async (req, res, next) => {
     const passwordHash = await argon2.hash(password);
 
     try {
-        // Create a new user record in the database using Prisma.
+        // Create the user and its Spender identity together, atomically -
+        // every User must have exactly one Spender, created at the same time.
         const newUser = await prisma.user.create({
             data: {
                 name,
                 email,
-                passwordHash
+                passwordHash,
+                spender: { create: {} },
             },
         });
 
@@ -96,9 +98,13 @@ router.use(requireAuth);
 
 router.get("/", async (req, res, next) => {
   try {
-    // Fetch all users records from the database using Prisma.
-    const users = await prisma.user.findMany();
-    
+    // Only ever list users within the current user's own household - a user
+    // with no household yet only ever sees themselves.
+    const { householdId } = res.locals.currentUser;
+    const users = householdId
+      ? await prisma.user.findMany({ where: { householdId } })
+      : [res.locals.currentUser];
+
     // Respond with the list of users.
     res.status(200).json(users);
   } catch (error) {
@@ -119,6 +125,14 @@ router.get("/:id", requireValidId, async (req, res, next) => {
       return res.status(404).json({ error: "User not found." });
     }
 
+    const isSelf = id === res.locals.currentUser.id;
+    const isSameHousehold =
+      user.householdId !== null && user.householdId === res.locals.currentUser.householdId;
+
+    if (!isSelf && !isSameHousehold) {
+      return res.status(404).json({ error: "User not found." });
+    }
+
     // Respond with the found user record.
     res.status(200).json(user);
   } catch (error) {
@@ -134,6 +148,10 @@ router.patch("/:id", requireValidId, async (req, res, next) => {
     const validationError = validateUserInput(req.body, { partial: true });
     if (validationError) {
         return res.status(400).json({ error: validationError });
+    }
+
+    if (id !== res.locals.currentUser.id) {
+      return res.status(403).json({ error: "You can only update your own account." });
     }
 
     try {
@@ -158,6 +176,10 @@ router.patch("/:id", requireValidId, async (req, res, next) => {
 
 router.delete("/:id", requireValidId, async (req, res, next) => {
     const id = res.locals.id;
+
+    if (id !== res.locals.currentUser.id) {
+      return res.status(403).json({ error: "You can only delete your own account." });
+    }
 
     try {
         // Delete the user record from the database using Prisma.
