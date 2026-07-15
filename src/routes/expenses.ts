@@ -1,7 +1,8 @@
 import { Router } from "express";
 import { prisma } from "../prisma.js";
-import { requireValidId } from "../middleware.js";
+import { requireValidId, requireAuth } from "../middleware.js";
 import { Prisma } from "../generated/prisma/client.js";
+
 import { getExchangeRate } from "../exchangeRate.js";
 
 export const SUPPORTED_CURRENCIES = ["USD", "EUR", "MXN", "GBP", "JPY", "CAD", "CHF"];
@@ -26,6 +27,9 @@ export function validateExpenseInput(
 }
 
 const router = Router();
+
+// Every expense route requires a logged-in user.
+router.use(requireAuth);
 
 router.post("/", async (req, res, next) => {
   const { title, categoryId, spender, currency, amount, convertedAmount, date } = req.body;

@@ -29,3 +29,10 @@ model Expense {
   convertedAmount Int? // TODO: populate via exchange-rate API conversion
   date DateTime @db.Date
 }
+
+model User {
+  id Int @id @default(autoincrement())
+  email String @unique
+  name String
+  passwordHash String
+}

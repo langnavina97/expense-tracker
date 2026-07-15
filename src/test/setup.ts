@@ -14,4 +14,5 @@ if (!databaseUrl.includes("_test")) {
 beforeEach(async () => {
   await prisma.expense.deleteMany();
   await prisma.category.deleteMany();
+  await prisma.user.deleteMany();
 });

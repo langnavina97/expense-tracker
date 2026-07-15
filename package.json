@@ -22,6 +22,7 @@
   "homepage": "https://github.com/langnavina97/expense-tracker#readme",
   "devDependencies": {
     "@types/express": "^5.0.6",
+    "@types/express-session": "^1.19.0",
     "@types/node": "^26.1.0",
     "@types/supertest": "^7.2.0",
     "@vitest/coverage-v8": "^4.1.10",
@@ -35,7 +36,9 @@
   "dependencies": {
     "@prisma/adapter-pg": "^7.8.0",
     "@prisma/client": "^7.8.0",
+    "argon2": "^0.44.0",
     "dotenv": "^17.4.2",
-    "express": "^5.2.1"
+    "express": "^5.2.1",
+    "express-session": "^1.19.0"
   }
 }

@@ -17,6 +17,14 @@ export function requireValidId(req: express.Request, res: express.Response, next
   next();
 }
 
+// Route-specific middleware: requires an active session, or short-circuits with 401.
+export function requireAuth(req: express.Request, res: express.Response, next: express.NextFunction) {
+  if (!req.session.userId) {
+    return res.status(401).json({ error: "Authentication required." });
+  }
+  next();
+}
+
 // Error-handling middleware (4 args = how Express identifies it). Registered last, after all routes.
 export function errorHandler(err: unknown, req: express.Request, res: express.Response, next: express.NextFunction) {
   console.error(err);

@@ -1,12 +1,17 @@
-import { describe, it, expect, vi, afterEach } from "vitest";
-import request from "supertest";
-import { app } from "../../app.js";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { prisma } from "../../prisma.js";
 import { Prisma } from "../../generated/prisma/client.js";
+import { createAuthenticatedAgent } from "../helpers.js";
 
 vi.mock("../../exchangeRate.js", () => ({
   getExchangeRate: vi.fn().mockResolvedValue(100),
 }));
+
+let agent: Awaited<ReturnType<typeof createAuthenticatedAgent>>;
+
+beforeEach(async () => {
+  agent = await createAuthenticatedAgent();
+});
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -24,19 +29,19 @@ const validExpense = {
 describe("expenses routes - unexpected database errors fall through to the generic error handler", () => {
   it("POST / returns 500 on an unexpected database error", async () => {
     vi.spyOn(prisma.expense, "create").mockRejectedValueOnce(new Error("db down"));
-    const response = await request(app).post("/expenses").send(validExpense);
+    const response = await agent.post("/expenses").send(validExpense);
     expect(response.status).toBe(500);
   });
 
   it("GET / returns 500 on an unexpected database error", async () => {
     vi.spyOn(prisma.expense, "findMany").mockRejectedValueOnce(new Error("db down"));
-    const response = await request(app).get("/expenses");
+    const response = await agent.get("/expenses");
     expect(response.status).toBe(500);
   });
 
   it("GET /:id returns 500 on an unexpected database error", async () => {
     vi.spyOn(prisma.expense, "findUnique").mockRejectedValueOnce(new Error("db down"));
-    const response = await request(app).get("/expenses/1");
+    const response = await agent.get("/expenses/1");
     expect(response.status).toBe(500);
   });
 
@@ -53,13 +58,13 @@ describe("expenses routes - unexpected database errors fall through to the gener
     } as any);
     vi.spyOn(prisma.expense, "update").mockRejectedValueOnce(new Error("db down"));
 
-    const response = await request(app).patch("/expenses/1").send({ amount: 2000 });
+    const response = await agent.patch("/expenses/1").send({ amount: 2000 });
     expect(response.status).toBe(500);
   });
 
   it("DELETE /:id returns 500 on an unexpected database error", async () => {
     vi.spyOn(prisma.expense, "delete").mockRejectedValueOnce(new Error("db down"));
-    const response = await request(app).delete("/expenses/1");
+    const response = await agent.delete("/expenses/1");
     expect(response.status).toBe(500);
   });
 
@@ -81,7 +86,7 @@ describe("expenses routes - unexpected database errors fall through to the gener
       })
     );
 
-    const response = await request(app).patch("/expenses/1").send({ amount: 2000 });
+    const response = await agent.patch("/expenses/1").send({ amount: 2000 });
     expect(response.status).toBe(404);
   });
 });

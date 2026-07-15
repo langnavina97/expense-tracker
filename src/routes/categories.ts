@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { prisma } from "../prisma.js";
-import { requireValidId } from "../middleware.js";
+import { requireValidId, requireAuth } from "../middleware.js";
 import { Prisma } from "../generated/prisma/client.js";
 
 // Shared body validation for POST (partial: false) and PATCH (partial: true).
@@ -23,6 +23,35 @@ export function validateCategoryInput(
 }
 
 const router = Router();
+
+// Every category route requires a logged-in user.
+router.use(requireAuth);
+
+router.post("/", async (req, res, next) => {
+    const {name} = req.body;
+
+    const validationError = validateCategoryInput(req.body, { partial: false });
+    if (validationError) {
+        return res.status(400).json({ error: validationError });
+    }
+
+    try {
+        // Create a new category record in the database using Prisma.
+        const newCategory = await prisma.category.create({
+            data: {
+                name,
+            },
+        });
+
+        // Respond with the newly created category record.
+        res.status(201).json(newCategory);
+    } catch (error) {
+        if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+            return res.status(409).json({ error: `Category "${name}" already exists.` });
+        }
+        next(error);
+    }
+});
 
 router.get("/", async (req, res, next) => {
   try {
@@ -54,32 +83,6 @@ router.get("/:id", requireValidId, async (req, res, next) => {
   } catch (error) {
     next(error);
   }
-});
-
-router.post("/", async (req, res, next) => {
-    const {name} = req.body;
-
-    const validationError = validateCategoryInput(req.body, { partial: false });
-    if (validationError) {
-        return res.status(400).json({ error: validationError });
-    }
-
-    try {
-        // Create a new category record in the database using Prisma.
-        const newCategory = await prisma.category.create({
-            data: {
-                name,
-            },
-        });
-
-        // Respond with the newly created category record.
-        res.status(201).json(newCategory);
-    } catch (error) {
-        if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
-            return res.status(409).json({ error: `Category "${name}" already exists.` });
-        }
-        next(error);
-    }
 });
 
 router.patch("/:id", requireValidId, async (req, res, next) => {
