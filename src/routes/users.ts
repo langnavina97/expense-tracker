@@ -73,7 +73,9 @@ router.post("/login", async (req, res, next) => {
       omit: { passwordHash: false },
     });
 
-    if (!user || user.deletedAt) {
+    // Google-only accounts have no passwordHash at all - reject the same way
+    // as any other invalid login, don't reveal an account exists but has no password.
+    if (!user || user.deletedAt || !user.passwordHash) {
       return res.status(401).json({ error: "Invalid email or password." });
     }
 

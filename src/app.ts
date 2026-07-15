@@ -7,6 +7,7 @@ import expensesRouter from "./routes/expenses.js";
 import categoriesRouter from "./routes/categories.js";
 import usersRouter from "./routes/users.js";
 import householdsRouter from "./routes/households.js";
+import googleAuthRouter from "./routes/googleAuth.js";
 
 // Create an instance of the Express application, representing the server.
 export const app = express();
@@ -36,6 +37,7 @@ app.use(
     cookie: {
       maxAge: 1000 * 60 * 60 * 24 * 7, // 7 days
       secure: process.env.NODE_ENV === "production",
+      sameSite: "lax", // allows the cookie through Google's redirect back to our callback
     },
   })
 );
@@ -51,5 +53,7 @@ app.use("/categories", categoriesRouter);
 app.use("/users", usersRouter);
 
 app.use("/households", householdsRouter);
+
+app.use("/auth", googleAuthRouter);
 
 app.use(errorHandler);
