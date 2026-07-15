@@ -18,6 +18,7 @@
   "author": "",
   "license": "ISC",
   "type": "module",
+  "packageManager": "npm@11.17.0",
   "bugs": {
     "url": "https://github.com/langnavina97/expense-tracker/issues"
   },
