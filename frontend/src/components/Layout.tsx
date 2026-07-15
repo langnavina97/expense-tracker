@@ -2,7 +2,12 @@ import { NavLink, Outlet } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 
 export function Layout() {
-  const { currentUser, logout } = useAuth();
+  const { currentUser, logout, deleteAccount } = useAuth();
+
+  async function handleDeleteAccount() {
+    if (!confirm("Delete your account? This can't be undone.")) return;
+    await deleteAccount();
+  }
 
   return (
     <div className="app-shell">
@@ -28,6 +33,9 @@ export function Layout() {
           )}
           <button className="btn-ghost btn-small" onClick={() => logout()}>
             Log out
+          </button>
+          <button className="btn-danger btn-small" onClick={handleDeleteAccount}>
+            Delete account
           </button>
         </div>
       </header>

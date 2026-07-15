@@ -41,6 +41,7 @@ export const api = {
   login: (data: { email: string; password: string }) =>
     request<User>("/users/login", { method: "POST", body: JSON.stringify(data) }),
   logout: () => request<{ message: string }>("/users/logout", { method: "POST" }),
+  deleteAccount: (id: number) => request<{ message: string }>(`/users/${id}`, { method: "DELETE" }),
 
   getHousehold: () => request<Household>("/households"),
   createHousehold: (data: { name: string }) =>

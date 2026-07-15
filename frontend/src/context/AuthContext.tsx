@@ -8,6 +8,7 @@ interface AuthContextValue {
   login: (email: string, password: string) => Promise<void>;
   register: (name: string, email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
+  deleteAccount: () => Promise<void>;
   refresh: () => Promise<void>;
 }
 
@@ -47,8 +48,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setCurrentUser(null);
   }, []);
 
+  const deleteAccount = useCallback(async () => {
+    if (!currentUser) return;
+    await api.deleteAccount(currentUser.id);
+    setCurrentUser(null);
+  }, [currentUser]);
+
   return (
-    <AuthContext.Provider value={{ currentUser, loading, login, register, logout, refresh }}>
+    <AuthContext.Provider value={{ currentUser, loading, login, register, logout, deleteAccount, refresh }}>
       {children}
     </AuthContext.Provider>
   );
