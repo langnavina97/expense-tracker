@@ -7,6 +7,12 @@ vi.mock("../../exchangeRate.js", () => ({
   getExchangeRate: vi.fn().mockResolvedValue(100),
 }));
 
+vi.mock("../../categorize.js", () => ({
+  suggestCategory: vi.fn(async (title: string, categoryNames: string[]) =>
+    title.toLowerCase().includes("taco") && categoryNames.includes("Food") ? "Food" : null
+  ),
+}));
+
 let agent: Awaited<ReturnType<typeof createAuthenticatedAgent>>["agent"];
 let spenderId: number;
 let categoryId: number;
@@ -27,6 +33,44 @@ const validExpense = () => ({
 });
 
 describe("expenses routes", () => {
+  it("POST /expenses/suggest-category returns a matching category", async () => {
+    const response = await agent.post("/expenses/suggest-category").send({ title: "Tacos" });
+
+    expect(response.status).toBe(200);
+    expect(response.body.suggestedCategory).toMatchObject({ id: categoryId, name: "Food" });
+  });
+
+  it("POST /expenses/suggest-category returns null when nothing matches", async () => {
+    const response = await agent.post("/expenses/suggest-category").send({ title: "Something obscure" });
+
+    expect(response.status).toBe(200);
+    expect(response.body.suggestedCategory).toBeNull();
+  });
+
+  it("POST /expenses/suggest-category fails without a title", async () => {
+    const response = await agent.post("/expenses/suggest-category").send({});
+
+    expect(response.status).toBe(400);
+  });
+
+  it("POST /expenses/suggest-category returns null when the caller has no household", async () => {
+    const noHouseholdAgent = request.agent(app);
+    await noHouseholdAgent.post("/users").send({
+      name: "No Household",
+      email: "no-household-suggest@example.com",
+      password: "correcthorsebatterystaple",
+    });
+    await noHouseholdAgent.post("/users/login").send({
+      email: "no-household-suggest@example.com",
+      password: "correcthorsebatterystaple",
+    });
+
+    const response = await noHouseholdAgent.post("/expenses/suggest-category").send({ title: "Tacos" });
+
+    expect(response.status).toBe(200);
+    expect(response.body.suggestedCategory).toBeNull();
+  });
+
   it("POST /expenses creates an expense", async () => {
     const response = await agent.post("/expenses").send(validExpense());
 

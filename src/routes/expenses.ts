@@ -4,6 +4,7 @@ import { requireValidId, requireAuth } from "../middleware.js";
 import { Prisma, Role } from "../generated/prisma/client.js";
 
 import { getExchangeRate } from "../exchangeRate.js";
+import { suggestCategory } from "../categorize.js";
 
 export const SUPPORTED_CURRENCIES = ["USD", "EUR", "MXN", "GBP", "JPY", "CAD", "CHF"];
 
@@ -64,6 +65,28 @@ const router = Router();
 
 // Every expense route requires a logged-in user.
 router.use(requireAuth);
+
+router.post("/suggest-category", async (req, res, next) => {
+  const { title } = req.body;
+  const { currentUser } = res.locals;
+
+  if (!title) {
+    return res.status(400).json({ error: "title is required." });
+  }
+
+  try {
+    const categories = currentUser.householdId
+      ? await prisma.category.findMany({ where: { householdId: currentUser.householdId } })
+      : [];
+
+    const suggestedName = await suggestCategory(title, categories.map((c) => c.name));
+    const suggestedCategory = categories.find((c) => c.name === suggestedName) ?? null;
+
+    res.status(200).json({ suggestedCategory });
+  } catch (error) {
+    next(error);
+  }
+});
 
 router.post("/", async (req, res, next) => {
   const { title, categoryId, spenderIds, currency, amount, date } = req.body;

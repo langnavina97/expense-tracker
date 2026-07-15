@@ -42,6 +42,12 @@ const fakeExistingExpense = () => ({
 });
 
 describe("expenses routes - unexpected database errors fall through to the generic error handler", () => {
+  it("POST /suggest-category returns 500 on an unexpected database error", async () => {
+    vi.spyOn(prisma.category, "findMany").mockRejectedValueOnce(new Error("db down"));
+    const response = await agent.post("/expenses/suggest-category").send({ title: "Tacos" });
+    expect(response.status).toBe(500);
+  });
+
   it("POST / returns 500 on an unexpected database error", async () => {
     vi.spyOn(prisma.expense, "create").mockRejectedValueOnce(new Error("db down"));
     const response = await agent.post("/expenses").send(validExpense());
