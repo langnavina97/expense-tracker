@@ -82,7 +82,9 @@ export function HouseholdPage() {
           {household.members.map((member) => (
             <div className="simple-list-row" key={member.id}>
               <div>
-                <div>{member.name}</div>
+                <div>
+                  {member.name} <span style={{ opacity: 0.6, fontSize: "0.8rem" }}>(ID: {member.id})</span>
+                </div>
                 <div style={{ fontSize: "0.8rem", color: "var(--color-text-muted)" }}>{member.email}</div>
               </div>
               <span className="badge">{member.role}</span>
@@ -91,26 +93,32 @@ export function HouseholdPage() {
         </div>
 
         {canAddMembers && (
-          <form onSubmit={handleAddMember} style={{ flexDirection: "row", gap: 10, marginTop: 16 }}>
-            <input
-              type="number"
-              placeholder="Existing user ID"
-              value={memberUserId}
-              onChange={(e) => setMemberUserId(e.target.value)}
-              required
-              style={{ flex: 1 }}
-            />
-            <select value={memberRole} onChange={(e) => setMemberRole(e.target.value as Role)}>
-              {ROLES.map((r) => (
-                <option key={r} value={r}>
-                  {r}
-                </option>
-              ))}
-            </select>
-            <button className="btn-primary" type="submit" disabled={addingMember}>
-              Add
-            </button>
-          </form>
+          <>
+            <p style={{ marginTop: 16, fontSize: "0.85rem" }}>
+              To add someone, have them register their own account first (without creating a household) - their
+              user ID is shown next to their name in the top bar once they're logged in.
+            </p>
+            <form onSubmit={handleAddMember} className="form-row">
+              <input
+                type="number"
+                placeholder="Existing user ID"
+                value={memberUserId}
+                onChange={(e) => setMemberUserId(e.target.value)}
+                required
+                style={{ flex: 1 }}
+              />
+              <select value={memberRole} onChange={(e) => setMemberRole(e.target.value as Role)}>
+                {ROLES.map((r) => (
+                  <option key={r} value={r}>
+                    {r}
+                  </option>
+                ))}
+              </select>
+              <button className="btn-primary" type="submit" disabled={addingMember}>
+                Add
+              </button>
+            </form>
+          </>
         )}
       </div>
 
@@ -129,7 +137,7 @@ export function HouseholdPage() {
         )}
 
         {canAddDependents && (
-          <form onSubmit={handleAddDependent} style={{ flexDirection: "row", gap: 10, marginTop: 16 }}>
+          <form onSubmit={handleAddDependent} className="form-row" style={{ marginTop: 16 }}>
             <input
               placeholder="Dependent's name"
               value={dependentName}

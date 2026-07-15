@@ -62,7 +62,7 @@ export const api = {
 
   getExpenses: () => request<Expense[]>("/expenses"),
   suggestCategory: (title: string) =>
-    request<{ suggestedCategory: Category | null }>("/expenses/suggest-category", {
+    request<{ suggestedCategory: Category | null; unavailable?: boolean }>("/expenses/suggest-category", {
       method: "POST",
       body: JSON.stringify({ title }),
     }),

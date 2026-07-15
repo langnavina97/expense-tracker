@@ -80,8 +80,11 @@ router.post("/suggest-category", async (req, res, next) => {
       : [];
 
     const suggestedName = await suggestCategory(title, categories.map((c) => c.name));
-    const suggestedCategory = categories.find((c) => c.name === suggestedName) ?? null;
+    if (suggestedName === undefined) {
+      return res.status(200).json({ suggestedCategory: null, unavailable: true });
+    }
 
+    const suggestedCategory = categories.find((c) => c.name === suggestedName) ?? null;
     res.status(200).json({ suggestedCategory });
   } catch (error) {
     next(error);

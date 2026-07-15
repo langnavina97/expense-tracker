@@ -76,7 +76,7 @@ export function CategoriesPage() {
       {error && <div className="alert alert-danger">{error}</div>}
 
       <div className="card">
-        <form onSubmit={handleAdd} style={{ flexDirection: "row", gap: 10 }}>
+        <form onSubmit={handleAdd} className="form-row">
           <input
             placeholder="New category name"
             value={newName}

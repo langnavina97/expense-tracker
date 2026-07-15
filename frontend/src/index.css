@@ -118,6 +118,10 @@ a {
   color: var(--color-text-muted);
 }
 
+.user-id-tag {
+  opacity: 0.6;
+}
+
 .main {
   flex: 1;
   width: 100%;
@@ -184,6 +188,11 @@ form {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 14px;
+}
+
+.form-row {
+  flex-direction: row;
+  gap: 10px;
 }
 
 input, select {
@@ -368,17 +377,97 @@ button:disabled {
   margin-top: 4px;
 }
 
+.pie-chart-wrap {
+  display: flex;
+  align-items: center;
+  gap: 28px;
+  flex-wrap: wrap;
+}
+
+.pie-chart {
+  width: 150px;
+  height: 150px;
+  border-radius: 50%;
+  position: relative;
+  flex-shrink: 0;
+}
+
+.pie-chart::after {
+  content: "";
+  position: absolute;
+  inset: 26px;
+  border-radius: 50%;
+  background: var(--color-surface);
+}
+
+.pie-legend {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1;
+  min-width: 200px;
+}
+
+.pie-legend-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.85rem;
+}
+
+.pie-swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
+.pie-legend-label {
+  flex: 1;
+  font-weight: 550;
+}
+
+.pie-legend-value {
+  color: var(--color-text-muted);
+}
+
+.filter-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 20px;
+  margin-bottom: 16px;
+}
+
 .expense-list {
   display: flex;
   flex-direction: column;
   gap: 10px;
 }
 
+.expense-list-header,
 .expense-row {
-  display: flex;
+  display: grid;
+  grid-template-columns: 1fr 140px 96px;
   align-items: center;
-  justify-content: space-between;
   gap: 16px;
+}
+
+.expense-list-header {
+  padding: 0 18px;
+  font-size: 0.76rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--color-text-muted);
+}
+
+.expense-list-header .expense-amounts,
+.expense-list-header .expense-actions {
+  text-align: right;
+}
+
+.expense-row {
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: var(--radius);
@@ -434,7 +523,7 @@ button:disabled {
 .expense-actions {
   display: flex;
   gap: 4px;
-  flex-shrink: 0;
+  justify-content: flex-end;
 }
 
 .empty-state {
@@ -493,6 +582,7 @@ button:disabled {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
   padding: 12px 0;
   border-bottom: 1px solid var(--color-border);
   gap: 12px;
@@ -508,4 +598,117 @@ button:disabled {
   align-items: center;
   justify-content: center;
   color: var(--color-text-muted);
+}
+
+/* Mobile */
+
+@media (max-width: 640px) {
+  .main {
+    padding: 20px 14px 48px;
+  }
+
+  .centered-page {
+    padding: 16px;
+  }
+
+  .card {
+    padding: 18px;
+  }
+
+  .topbar {
+    flex-wrap: wrap;
+    padding: 12px 14px;
+    row-gap: 10px;
+  }
+
+  .topbar-brand {
+    font-size: 0.98rem;
+  }
+
+  .topbar-user {
+    font-size: 0.82rem;
+    gap: 8px;
+  }
+
+  .user-id-tag {
+    display: none;
+  }
+
+  .topbar-nav {
+    order: 3;
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .topbar-nav a {
+    flex: 1;
+    text-align: center;
+    padding: 8px 6px;
+    font-size: 0.82rem;
+  }
+
+  .page-header {
+    flex-wrap: wrap;
+  }
+
+  .summary-row {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  /* The rigid table columns only work with room to breathe - below this
+     width, stack each expense into a simple card instead of squeezing a
+     fixed-width amount/actions column against a shrinking title. */
+  .expense-list-header {
+    display: none;
+  }
+
+  .expense-row {
+    grid-template-columns: 1fr;
+    gap: 10px;
+    padding: 14px;
+  }
+
+  .expense-amounts {
+    text-align: left;
+  }
+
+  .expense-actions {
+    justify-content: flex-start;
+  }
+
+  .field-row {
+    grid-template-columns: 1fr;
+  }
+
+  .modal-backdrop {
+    padding: 0;
+    align-items: flex-end;
+  }
+
+  .modal {
+    max-width: none;
+    width: 100%;
+    max-height: 85vh;
+    border-radius: var(--radius) var(--radius) 0 0;
+  }
+
+  .form-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .pie-chart {
+    width: 130px;
+    height: 130px;
+  }
+}
+
+@media (max-width: 400px) {
+  .summary-row {
+    grid-template-columns: 1fr;
+  }
+
+  .topbar-brand-text {
+    display: none;
+  }
 }

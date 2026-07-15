@@ -39,20 +39,32 @@ describe("suggestCategory", () => {
     expect(result).toBeNull();
   });
 
-  it("returns null if the response has no text", async () => {
+  it("returns undefined if the response has no text", async () => {
     generateContentMock.mockResolvedValueOnce({ text: undefined });
 
     const result = await suggestCategory("Tacos", ["Food", "Travel"]);
 
-    expect(result).toBeNull();
+    expect(result).toBeUndefined();
   });
 
-  it("returns null if the API call fails", async () => {
+  it("returns undefined if the API call fails", async () => {
     generateContentMock.mockRejectedValueOnce(new Error("API down"));
 
     const result = await suggestCategory("Tacos", ["Food", "Travel"]);
 
-    expect(result).toBeNull();
+    expect(result).toBeUndefined();
+  });
+
+  it("returns undefined if the API call times out", async () => {
+    vi.useFakeTimers();
+    generateContentMock.mockImplementationOnce(() => new Promise(() => {}));
+
+    const resultPromise = suggestCategory("Tacos", ["Food", "Travel"]);
+    await vi.advanceTimersByTimeAsync(10_000);
+    const result = await resultPromise;
+
+    expect(result).toBeUndefined();
+    vi.useRealTimers();
   });
 });
 

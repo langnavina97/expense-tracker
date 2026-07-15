@@ -7,7 +7,10 @@ export function Layout() {
   return (
     <div className="app-shell">
       <header className="topbar">
-        <div className="topbar-brand">💸 Expense Tracker</div>
+        <div className="topbar-brand">
+          <span aria-hidden="true">💸</span>
+          <span className="topbar-brand-text">Expense Tracker</span>
+        </div>
         {currentUser?.householdId && (
           <nav className="topbar-nav">
             <NavLink to="/" end>
@@ -18,7 +21,11 @@ export function Layout() {
           </nav>
         )}
         <div className="topbar-user">
-          {currentUser && <span>{currentUser.name}</span>}
+          {currentUser && (
+            <span>
+              {currentUser.name} <span className="user-id-tag">(ID: {currentUser.id})</span>
+            </span>
+          )}
           <button className="btn-ghost btn-small" onClick={() => logout()}>
             Log out
           </button>

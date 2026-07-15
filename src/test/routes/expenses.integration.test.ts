@@ -8,9 +8,10 @@ vi.mock("../../exchangeRate.js", () => ({
 }));
 
 vi.mock("../../categorize.js", () => ({
-  suggestCategory: vi.fn(async (title: string, categoryNames: string[]) =>
-    title.toLowerCase().includes("taco") && categoryNames.includes("Food") ? "Food" : null
-  ),
+  suggestCategory: vi.fn(async (title: string, categoryNames: string[]) => {
+    if (title.toLowerCase().includes("unavailable")) return undefined;
+    return title.toLowerCase().includes("taco") && categoryNames.includes("Food") ? "Food" : null;
+  }),
 }));
 
 let agent: Awaited<ReturnType<typeof createAuthenticatedAgent>>["agent"];
@@ -45,6 +46,14 @@ describe("expenses routes", () => {
 
     expect(response.status).toBe(200);
     expect(response.body.suggestedCategory).toBeNull();
+  });
+
+  it("POST /expenses/suggest-category flags unavailable when the AI call couldn't be completed", async () => {
+    const response = await agent.post("/expenses/suggest-category").send({ title: "Unavailable test" });
+
+    expect(response.status).toBe(200);
+    expect(response.body.suggestedCategory).toBeNull();
+    expect(response.body.unavailable).toBe(true);
   });
 
   it("POST /expenses/suggest-category fails without a title", async () => {

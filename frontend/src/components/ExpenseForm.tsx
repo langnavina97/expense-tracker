@@ -21,7 +21,7 @@ export function ExpenseForm({ household, categories, expense, onClose, onSaved }
   const isEditing = Boolean(expense);
 
   const [title, setTitle] = useState(expense?.title ?? "");
-  const [categoryId, setCategoryId] = useState<number | "">(expense?.categoryId ?? categories[0]?.id ?? "");
+  const [categoryId, setCategoryId] = useState<number | "">(expense?.categoryId ?? "");
   const [currency, setCurrency] = useState(expense?.currency ?? "USD");
   const [amount, setAmount] = useState(expense ? (expense.amount / 100).toFixed(2) : "");
   const [date, setDate] = useState(expense?.date.slice(0, 10) ?? todayISODate());
@@ -50,10 +50,12 @@ export function ExpenseForm({ household, categories, expense, onClose, onSaved }
     setSuggesting(true);
     setSuggestionHint(null);
     try {
-      const { suggestedCategory } = await api.suggestCategory(title);
+      const { suggestedCategory, unavailable } = await api.suggestCategory(title);
       if (suggestedCategory) {
         setCategoryId(suggestedCategory.id);
         setSuggestionHint(`AI picked "${suggestedCategory.name}" for this title.`);
+      } else if (unavailable) {
+        setSuggestionHint("AI suggestions are unavailable right now - pick a category manually.");
       } else {
         setSuggestionHint("No strong match - pick a category manually.");
       }
@@ -118,7 +120,15 @@ export function ExpenseForm({ household, categories, expense, onClose, onSaved }
 
         <div className="field">
           <label htmlFor="category">Category</label>
-          <select id="category" value={categoryId} onChange={(e) => setCategoryId(Number(e.target.value))}>
+          <select
+            id="category"
+            required
+            value={categoryId}
+            onChange={(e) => setCategoryId(e.target.value ? Number(e.target.value) : "")}
+          >
+            <option value="" disabled>
+              Select a category…
+            </option>
             {categories.map((c) => (
               <option key={c.id} value={c.id}>
                 {c.name}
