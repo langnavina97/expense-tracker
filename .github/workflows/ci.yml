@@ -9,6 +9,10 @@ on:
 jobs:
   backend:
     runs-on: ubuntu-latest
+    env:
+      # Needed by prisma.config.ts just to load (even "generate", which
+      # never touches the database, reads this at config-load time).
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/expense_tracker_test
     services:
       postgres:
         image: postgres:16
@@ -52,8 +56,6 @@ jobs:
 
       - name: Apply migrations
         run: npx prisma migrate deploy
-        env:
-          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/expense_tracker_test
 
       - name: Type-check
         run: npx tsc --noEmit
