@@ -11,8 +11,6 @@ function canModify(currentUser: { id: number; role: string | null }, expense: Ex
   return currentUser.role !== "CHILD" || expense.createdByUserId === currentUser.id;
 }
 
-const ALL_CATEGORIES = "ALL";
-
 export function DashboardPage() {
   const { currentUser } = useAuth();
   const [household, setHousehold] = useState<Household | null>(null);
@@ -22,7 +20,8 @@ export function DashboardPage() {
   const [error, setError] = useState<string | null>(null);
   const [formOpen, setFormOpen] = useState(false);
   const [editingExpense, setEditingExpense] = useState<Expense | undefined>(undefined);
-  const [categoryFilter, setCategoryFilter] = useState<number | typeof ALL_CATEGORIES>(ALL_CATEGORIES);
+  // Empty set means "no filter" - every category shown.
+  const [selectedCategoryIds, setSelectedCategoryIds] = useState<Set<number>>(new Set());
 
   async function loadAll() {
     try {
@@ -72,6 +71,18 @@ export function DashboardPage() {
     loadAll();
   }
 
+  function toggleCategoryFilter(categoryId: number) {
+    setSelectedCategoryIds((current) => {
+      const next = new Set(current);
+      if (next.has(categoryId)) {
+        next.delete(categoryId);
+      } else {
+        next.add(categoryId);
+      }
+      return next;
+    });
+  }
+
   if (loading) return <div className="loading-screen">Loading…</div>;
   if (error) return <div className="alert alert-danger">{error}</div>;
   if (!household || !currentUser) return null;
@@ -81,16 +92,24 @@ export function DashboardPage() {
   // color always matches its slice.
   const categoryColor = new Map(categories.map((c, i) => [c.id, CHART_COLORS[i % CHART_COLORS.length]!]));
 
-  // Category breakdown always reflects every expense, regardless of the
-  // filter below - it's the "big picture" the filter lets you drill into.
+  // Both breakdowns always reflect every expense, regardless of the filter
+  // below - they're the "big picture" the filter lets you drill into.
   const totalsByCategory = new Map<number, number>();
+  // An expense can have multiple spenders (a shared purchase) - split its
+  // amount evenly across them for the per-person breakdown.
+  const totalsBySpender = new Map<number, number>();
   for (const expense of expenses) {
     totalsByCategory.set(
       expense.categoryId,
       (totalsByCategory.get(expense.categoryId) ?? 0) + (expense.convertedAmount ?? 0)
     );
+    const perPerson = (expense.convertedAmount ?? 0) / expense.spenders.length;
+    for (const spender of expense.spenders) {
+      totalsBySpender.set(spender.id, (totalsBySpender.get(spender.id) ?? 0) + perPerson);
+    }
   }
-  const pieSlices = categories
+
+  const categorySlices = categories
     .map((category, index) => ({
       label: category.name,
       value: totalsByCategory.get(category.id) ?? 0,
@@ -98,8 +117,20 @@ export function DashboardPage() {
     }))
     .filter((slice) => slice.value > 0);
 
+  const people = [
+    ...household.members.map((m) => ({ spenderId: m.spenderId, name: m.name })),
+    ...household.dependents.map((d) => ({ spenderId: d.spenderId, name: d.name })),
+  ];
+  const peopleSlices = people
+    .map((person, index) => ({
+      label: person.name,
+      value: totalsBySpender.get(person.spenderId) ?? 0,
+      color: CHART_COLORS[index % CHART_COLORS.length]!,
+    }))
+    .filter((slice) => slice.value > 0);
+
   const filteredExpenses =
-    categoryFilter === ALL_CATEGORIES ? expenses : expenses.filter((e) => e.categoryId === categoryFilter);
+    selectedCategoryIds.size === 0 ? expenses : expenses.filter((e) => selectedCategoryIds.has(e.categoryId));
   const sortedExpenses = [...filteredExpenses].sort((a, b) => b.date.localeCompare(a.date));
 
   const now = new Date();
@@ -124,7 +155,7 @@ export function DashboardPage() {
 
       <div className="summary-row">
         <div className="stat-card">
-          <div className="stat-label">Total{categoryFilter !== ALL_CATEGORIES ? " (filtered)" : ""}</div>
+          <div className="stat-label">Total{selectedCategoryIds.size > 0 ? " (filtered)" : ""}</div>
           <div className="stat-value">{formatMoney(totalCents, "USD")}</div>
         </div>
         <div className="stat-card">
@@ -137,10 +168,17 @@ export function DashboardPage() {
         </div>
       </div>
 
-      {pieSlices.length > 0 && (
+      {categorySlices.length > 0 && (
         <div className="card">
           <h2 style={{ fontSize: "1rem", marginBottom: 16 }}>Spending by category</h2>
-          <PieChart slices={pieSlices} />
+          <PieChart slices={categorySlices} />
+        </div>
+      )}
+
+      {peopleSlices.length > 0 && (
+        <div className="card">
+          <h2 style={{ fontSize: "1rem", marginBottom: 16 }}>Spending by person</h2>
+          <PieChart slices={peopleSlices} />
         </div>
       )}
 
@@ -160,8 +198,8 @@ export function DashboardPage() {
           <div className="filter-pills">
             <button
               type="button"
-              className={`checkbox-pill ${categoryFilter === ALL_CATEGORIES ? "checked" : ""}`}
-              onClick={() => setCategoryFilter(ALL_CATEGORIES)}
+              className={`checkbox-pill ${selectedCategoryIds.size === 0 ? "checked" : ""}`}
+              onClick={() => setSelectedCategoryIds(new Set())}
             >
               All categories
             </button>
@@ -169,8 +207,8 @@ export function DashboardPage() {
               <button
                 key={category.id}
                 type="button"
-                className={`checkbox-pill ${categoryFilter === category.id ? "checked" : ""}`}
-                onClick={() => setCategoryFilter(category.id)}
+                className={`checkbox-pill ${selectedCategoryIds.has(category.id) ? "checked" : ""}`}
+                onClick={() => toggleCategoryFilter(category.id)}
               >
                 {category.name}
               </button>
@@ -179,7 +217,7 @@ export function DashboardPage() {
 
           {sortedExpenses.length === 0 ? (
             <div className="card empty-state">
-              <p>No expenses in this category.</p>
+              <p>No expenses in these categories.</p>
             </div>
           ) : (
             <div className="expense-list">

@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { prisma } from "../prisma.js";
-import { requireAuth } from "../middleware.js";
+import { requireAuth, requireValidId } from "../middleware.js";
 import { Prisma, Role } from "../generated/prisma/client.js";
 
 const router = Router();
@@ -93,6 +93,49 @@ router.post("/members", async (req, res, next) => {
     const updatedUser = await prisma.user.update({
       where: { id: userId },
       data: { householdId: currentUser.householdId, role },
+    });
+
+    res.status(200).json(updatedUser);
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2025") {
+      return res.status(404).json({ error: "User not found." });
+    }
+    next(error);
+  }
+});
+
+// Change an existing member's role. LEAD only, and not on yourself - that
+// could leave the household with no lead at all.
+router.patch("/members/:id", requireValidId, async (req, res, next) => {
+  const targetId = res.locals.id;
+  const { role } = req.body;
+  const currentUser = res.locals.currentUser;
+
+  if (!currentUser.householdId) {
+    return res.status(400).json({ error: "You don't belong to a household." });
+  }
+
+  if (currentUser.role !== Role.LEAD) {
+    return res.status(403).json({ error: "Only the household lead can change roles." });
+  }
+
+  if (!role || !(role in Role)) {
+    return res.status(400).json({ error: "A valid role is required." });
+  }
+
+  if (targetId === currentUser.id) {
+    return res.status(400).json({ error: "You can't change your own role." });
+  }
+
+  try {
+    const targetUser = await prisma.user.findUnique({ where: { id: targetId } });
+    if (!targetUser || targetUser.deletedAt || targetUser.householdId !== currentUser.householdId) {
+      return res.status(404).json({ error: "User not found in your household." });
+    }
+
+    const updatedUser = await prisma.user.update({
+      where: { id: targetId },
+      data: { role },
     });
 
     res.status(200).json(updatedUser);

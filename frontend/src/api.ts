@@ -48,6 +48,8 @@ export const api = {
     request<Household>("/households", { method: "POST", body: JSON.stringify(data) }),
   addMember: (data: { userId: number; role: string }) =>
     request<User>("/households/members", { method: "POST", body: JSON.stringify(data) }),
+  updateMemberRole: (userId: number, data: { role: string }) =>
+    request<User>(`/households/members/${userId}`, { method: "PATCH", body: JSON.stringify(data) }),
   addDependent: (data: { name: string }) =>
     request<{ id: number; name: string }>("/households/dependents", {
       method: "POST",

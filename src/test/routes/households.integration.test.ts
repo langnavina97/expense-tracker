@@ -128,6 +128,71 @@ describe("households routes", () => {
     expect(stillTheirs.body.role).toBe("LEAD");
   });
 
+  it("PATCH /members/:id changes an existing member's role", async () => {
+    const { agent: leadAgent, householdId } = await createAuthenticatedAgent();
+    const { userId: otherUserId } = await registerAndLoginNoHousehold("promote@example.com");
+    await leadAgent.post("/households/members").send({ userId: otherUserId, role: "CHILD" });
+
+    const response = await leadAgent.patch(`/households/members/${otherUserId}`).send({ role: "ADULT" });
+
+    expect(response.status).toBe(200);
+    expect(response.body.role).toBe("ADULT");
+    expect(response.body.householdId).toBe(householdId);
+  });
+
+  it("PATCH /members/:id fails if the caller doesn't belong to a household", async () => {
+    const { agent } = await registerAndLoginNoHousehold("nohousehold3@example.com");
+
+    const response = await agent.patch("/households/members/1").send({ role: "ADULT" });
+
+    expect(response.status).toBe(400);
+  });
+
+  it("PATCH /members/:id fails if the caller isn't LEAD", async () => {
+    const { agent: leadAgent } = await createAuthenticatedAgent();
+    const { agent: otherAgent, userId: otherUserId } = await registerAndLoginNoHousehold("nonlead@example.com");
+    await leadAgent.post("/households/members").send({ userId: otherUserId, role: "ADULT" });
+
+    const response = await otherAgent.patch(`/households/members/${otherUserId}`).send({ role: "CHILD" });
+
+    expect(response.status).toBe(403);
+  });
+
+  it("PATCH /members/:id fails with a missing or invalid role", async () => {
+    const { agent: leadAgent } = await createAuthenticatedAgent();
+    const { userId: otherUserId } = await registerAndLoginNoHousehold("badrole2@example.com");
+    await leadAgent.post("/households/members").send({ userId: otherUserId, role: "ADULT" });
+
+    const response = await leadAgent.patch(`/households/members/${otherUserId}`).send({ role: "MANAGER" });
+
+    expect(response.status).toBe(400);
+  });
+
+  it("PATCH /members/:id fails if the lead tries to change their own role", async () => {
+    const { agent: leadAgent, userId: leadUserId } = await createAuthenticatedAgent();
+
+    const response = await leadAgent.patch(`/households/members/${leadUserId}`).send({ role: "ADULT" });
+
+    expect(response.status).toBe(400);
+  });
+
+  it("PATCH /members/:id fails for a user not in the caller's household", async () => {
+    const { agent: leadAgent } = await createAuthenticatedAgent();
+    const { userId: outsiderId } = await registerAndLoginNoHousehold("outsider@example.com");
+
+    const response = await leadAgent.patch(`/households/members/${outsiderId}`).send({ role: "ADULT" });
+
+    expect(response.status).toBe(404);
+  });
+
+  it("PATCH /members/:id fails for a nonexistent user", async () => {
+    const { agent: leadAgent } = await createAuthenticatedAgent();
+
+    const response = await leadAgent.patch("/households/members/999999").send({ role: "ADULT" });
+
+    expect(response.status).toBe(404);
+  });
+
   it("POST /dependents adds a dependent to the household", async () => {
     const { agent, householdId } = await createAuthenticatedAgent();
 

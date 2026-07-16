@@ -17,6 +17,7 @@ export function HouseholdPage() {
 
   const [dependentName, setDependentName] = useState("");
   const [addingDependent, setAddingDependent] = useState(false);
+  const [changingRoleId, setChangingRoleId] = useState<number | null>(null);
 
   async function loadHousehold() {
     try {
@@ -44,6 +45,19 @@ export function HouseholdPage() {
       setError(err instanceof ApiError ? err.message : "Couldn't add that member.");
     } finally {
       setAddingMember(false);
+    }
+  }
+
+  async function handleRoleChange(userId: number, role: Role) {
+    setError(null);
+    setChangingRoleId(userId);
+    try {
+      await api.updateMemberRole(userId, { role });
+      await loadHousehold();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Couldn't change that member's role.");
+    } finally {
+      setChangingRoleId(null);
     }
   }
 
@@ -87,7 +101,21 @@ export function HouseholdPage() {
                 </div>
                 <div style={{ fontSize: "0.8rem", color: "var(--color-text-muted)" }}>{member.email}</div>
               </div>
-              <span className="badge">{member.role}</span>
+              {canAddMembers && member.id !== currentUser.id ? (
+                <select
+                  value={member.role ?? ""}
+                  disabled={changingRoleId === member.id}
+                  onChange={(e) => handleRoleChange(member.id, e.target.value as Role)}
+                >
+                  {ROLES.map((r) => (
+                    <option key={r} value={r}>
+                      {r}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <span className="badge">{member.role}</span>
+              )}
             </div>
           ))}
         </div>
