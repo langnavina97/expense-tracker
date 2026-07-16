@@ -1,5 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { useAuth } from "../context/AuthContext";
+import { useToast } from "../context/ToastContext";
+import { useConfirm } from "../context/ConfirmContext";
 import { api, ApiError } from "../api";
 import type { Household, Role } from "../types";
 
@@ -7,6 +9,8 @@ const ROLES: Role[] = ["LEAD", "ADULT", "CHILD"];
 
 export function HouseholdPage() {
   const { currentUser } = useAuth();
+  const { showToast } = useToast();
+  const confirm = useConfirm();
   const [household, setHousehold] = useState<Household | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -14,10 +18,13 @@ export function HouseholdPage() {
   const [memberUserId, setMemberUserId] = useState("");
   const [memberRole, setMemberRole] = useState<Role>("ADULT");
   const [addingMember, setAddingMember] = useState(false);
+  const [changingRoleId, setChangingRoleId] = useState<number | null>(null);
+  const [removingMemberId, setRemovingMemberId] = useState<number | null>(null);
 
   const [dependentName, setDependentName] = useState("");
   const [addingDependent, setAddingDependent] = useState(false);
-  const [changingRoleId, setChangingRoleId] = useState<number | null>(null);
+  const [editingDependentId, setEditingDependentId] = useState<number | null>(null);
+  const [editingDependentName, setEditingDependentName] = useState("");
 
   async function loadHousehold() {
     try {
@@ -49,15 +56,30 @@ export function HouseholdPage() {
   }
 
   async function handleRoleChange(userId: number, role: Role) {
-    setError(null);
     setChangingRoleId(userId);
     try {
       await api.updateMemberRole(userId, { role });
       await loadHousehold();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Couldn't change that member's role.");
+      showToast(err instanceof ApiError ? err.message : "Couldn't change that member's role.");
     } finally {
       setChangingRoleId(null);
+    }
+  }
+
+  async function handleRemoveMember(userId: number, name: string) {
+    const confirmed = await confirm(`Remove ${name} from this household?`);
+    if (!confirmed) return;
+
+    setRemovingMemberId(userId);
+    try {
+      await api.removeMember(userId);
+      await loadHousehold();
+      showToast(`${name} was removed from the household.`, "success");
+    } catch (err) {
+      showToast(err instanceof ApiError ? err.message : "Couldn't remove that member.");
+    } finally {
+      setRemovingMemberId(null);
     }
   }
 
@@ -73,6 +95,34 @@ export function HouseholdPage() {
       setError(err instanceof ApiError ? err.message : "Couldn't add that dependent.");
     } finally {
       setAddingDependent(false);
+    }
+  }
+
+  function startEditDependent(id: number, name: string) {
+    setEditingDependentId(id);
+    setEditingDependentName(name);
+  }
+
+  async function saveEditDependent(id: number) {
+    try {
+      await api.renameDependent(id, { name: editingDependentName });
+      setEditingDependentId(null);
+      await loadHousehold();
+    } catch (err) {
+      showToast(err instanceof ApiError ? err.message : "Couldn't rename that dependent.");
+    }
+  }
+
+  async function handleRemoveDependent(id: number, name: string) {
+    const confirmed = await confirm(`Remove ${name}?`);
+    if (!confirmed) return;
+
+    try {
+      await api.removeDependent(id);
+      await loadHousehold();
+      showToast(`${name} was removed.`, "success");
+    } catch (err) {
+      showToast(err instanceof ApiError ? err.message : "Couldn't remove that dependent.");
     }
   }
 
@@ -101,21 +151,32 @@ export function HouseholdPage() {
                 </div>
                 <div style={{ fontSize: "0.8rem", color: "var(--color-text-muted)" }}>{member.email}</div>
               </div>
-              {canAddMembers && member.id !== currentUser.id ? (
-                <select
-                  value={member.role ?? ""}
-                  disabled={changingRoleId === member.id}
-                  onChange={(e) => handleRoleChange(member.id, e.target.value as Role)}
-                >
-                  {ROLES.map((r) => (
-                    <option key={r} value={r}>
-                      {r}
-                    </option>
-                  ))}
-                </select>
-              ) : (
-                <span className="badge">{member.role}</span>
-              )}
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                {canAddMembers && member.id !== currentUser.id ? (
+                  <>
+                    <select
+                      value={member.role ?? ""}
+                      disabled={changingRoleId === member.id}
+                      onChange={(e) => handleRoleChange(member.id, e.target.value as Role)}
+                    >
+                      {ROLES.map((r) => (
+                        <option key={r} value={r}>
+                          {r}
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      className="btn-danger btn-small"
+                      disabled={removingMemberId === member.id}
+                      onClick={() => handleRemoveMember(member.id, member.name)}
+                    >
+                      Remove
+                    </button>
+                  </>
+                ) : (
+                  <span className="badge">{member.role}</span>
+                )}
+              </div>
             </div>
           ))}
         </div>
@@ -158,7 +219,43 @@ export function HouseholdPage() {
           <div className="simple-list">
             {household.dependents.map((dependent) => (
               <div className="simple-list-row" key={dependent.id}>
-                <span>{dependent.name}</span>
+                {editingDependentId === dependent.id ? (
+                  <>
+                    <input
+                      value={editingDependentName}
+                      onChange={(e) => setEditingDependentName(e.target.value)}
+                      autoFocus
+                    />
+                    <div style={{ display: "flex", gap: 6 }}>
+                      <button className="btn-primary btn-small" onClick={() => saveEditDependent(dependent.id)}>
+                        Save
+                      </button>
+                      <button className="btn-ghost btn-small" onClick={() => setEditingDependentId(null)}>
+                        Cancel
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <span>{dependent.name}</span>
+                    {canAddDependents && (
+                      <div style={{ display: "flex", gap: 6 }}>
+                        <button
+                          className="btn-ghost btn-small"
+                          onClick={() => startEditDependent(dependent.id, dependent.name)}
+                        >
+                          Rename
+                        </button>
+                        <button
+                          className="btn-danger btn-small"
+                          onClick={() => handleRemoveDependent(dependent.id, dependent.name)}
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    )}
+                  </>
+                )}
               </div>
             ))}
           </div>

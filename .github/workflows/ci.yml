@@ -1,0 +1,109 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: expense_tracker_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Create .env.test
+        run: |
+          cat <<EOF > .env.test
+          DATABASE_URL="postgresql://postgres:postgres@localhost:5432/expense_tracker_test"
+          SESSION_SECRET="ci-test-session-secret"
+          GEMINI_API_KEY="ci-test-key-not-real-the-sdk-is-always-mocked-in-tests"
+          GOOGLE_CLIENT_ID="ci-test-client-id-not-real-the-sdk-is-always-mocked-in-tests"
+          GOOGLE_CLIENT_SECRET="ci-test-client-secret-not-real-the-sdk-is-always-mocked-in-tests"
+          GOOGLE_REDIRECT_URI="http://localhost:3000/auth/google/callback"
+          FRONTEND_URL="/"
+          EOF
+
+      - name: Apply migrations
+        run: npx prisma migrate deploy
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/expense_tracker_test
+
+      - name: Type-check
+        run: npx tsc --noEmit
+
+      - name: Run tests with coverage
+        run: npm run test:coverage
+
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Type-check
+        working-directory: frontend
+        run: npx tsc -b --noEmit
+
+      - name: Run tests with coverage
+        working-directory: frontend
+        run: npm run test:coverage
+
+      - name: Build
+        working-directory: frontend
+        run: npm run build
+
+  # Reproduces Render's exact build command (including NODE_ENV=production)
+  # so a broken production build is caught here, not after deploying - this
+  # is exactly the class of bug that shipped once already (npm ci silently
+  # dropping devDependencies under NODE_ENV=production).
+  build-like-render:
+    runs-on: ubuntu-latest
+    env:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://user:pass@localhost:5432/unused_placeholder
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies (matching Render's build command)
+        run: npm ci --include=dev
+
+      - name: Build (matching Render's build command)
+        run: npm run build

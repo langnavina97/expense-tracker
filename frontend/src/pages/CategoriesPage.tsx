@@ -1,8 +1,12 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { api, ApiError } from "../api";
+import { useConfirm } from "../context/ConfirmContext";
+import { useToast } from "../context/ToastContext";
 import type { Category } from "../types";
 
 export function CategoriesPage() {
+  const confirm = useConfirm();
+  const { showToast } = useToast();
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -55,13 +59,16 @@ export function CategoriesPage() {
     }
   }
 
-  async function handleDelete(id: number) {
-    if (!confirm("Delete this category? Expenses using it will need a new category.")) return;
+  async function handleDelete(id: number, name: string) {
+    const confirmed = await confirm(`Delete "${name}"? Expenses using it will need a new category.`);
+    if (!confirmed) return;
+
     try {
       await api.deleteCategory(id);
       setCategories((current) => current.filter((c) => c.id !== id));
+      showToast(`"${name}" was deleted.`, "success");
     } catch (err) {
-      alert(err instanceof ApiError ? err.message : "Couldn't delete this category.");
+      showToast(err instanceof ApiError ? err.message : "Couldn't delete this category.");
     }
   }
 
@@ -116,7 +123,7 @@ export function CategoriesPage() {
                       <button className="btn-ghost btn-small" onClick={() => startEdit(category)}>
                         Rename
                       </button>
-                      <button className="btn-danger btn-small" onClick={() => handleDelete(category.id)}>
+                      <button className="btn-danger btn-small" onClick={() => handleDelete(category.id, category.name)}>
                         Delete
                       </button>
                     </div>

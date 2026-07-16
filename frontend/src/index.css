@@ -283,6 +283,15 @@ button:disabled {
   background: var(--color-danger-soft);
 }
 
+.btn-danger-solid {
+  background: var(--color-danger);
+  color: white;
+}
+
+.btn-danger-solid:hover:not(:disabled) {
+  opacity: 0.9;
+}
+
 .btn-small {
   padding: 6px 12px;
   font-size: 0.82rem;
@@ -579,6 +588,69 @@ button:disabled {
   display: flex;
   align-items: center;
   gap: 6px;
+}
+
+.confirm-modal {
+  max-width: 380px;
+}
+
+.confirm-modal p {
+  color: var(--color-text);
+  margin-bottom: 20px;
+}
+
+.confirm-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+/* Toasts */
+
+.toast-stack {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  left: 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  z-index: 20;
+  pointer-events: none;
+}
+
+.toast {
+  pointer-events: auto;
+  cursor: pointer;
+  max-width: 360px;
+  padding: 12px 16px;
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow);
+  font-size: 0.88rem;
+  font-weight: 550;
+  animation: toast-in 0.15s ease;
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.toast-error {
+  background: var(--color-danger);
+  color: white;
+}
+
+.toast-success {
+  background: var(--color-success);
+  color: white;
 }
 
 /* Table-ish list for categories/members */

@@ -1,12 +1,23 @@
 import { NavLink, Outlet } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import { useConfirm } from "../context/ConfirmContext";
+import { useToast } from "../context/ToastContext";
+import { ApiError } from "../api";
 
 export function Layout() {
   const { currentUser, logout, deleteAccount } = useAuth();
+  const confirm = useConfirm();
+  const { showToast } = useToast();
 
   async function handleDeleteAccount() {
-    if (!confirm("Delete your account? This can't be undone.")) return;
-    await deleteAccount();
+    const confirmed = await confirm("Delete your account? This can't be undone.");
+    if (!confirmed) return;
+
+    try {
+      await deleteAccount();
+    } catch (err) {
+      showToast(err instanceof ApiError ? err.message : "Couldn't delete your account.");
+    }
   }
 
   return (

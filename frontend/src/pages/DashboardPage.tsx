@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import { useConfirm } from "../context/ConfirmContext";
+import { useToast } from "../context/ToastContext";
 import { api, ApiError } from "../api";
 import { ExpenseForm } from "../components/ExpenseForm";
 import { CHART_COLORS, PieChart } from "../components/PieChart";
@@ -13,6 +15,8 @@ function canModify(currentUser: { id: number; role: string | null }, expense: Ex
 
 export function DashboardPage() {
   const { currentUser } = useAuth();
+  const confirm = useConfirm();
+  const { showToast } = useToast();
   const [household, setHousehold] = useState<Household | null>(null);
   const [categories, setCategories] = useState<Category[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
@@ -45,13 +49,16 @@ export function DashboardPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  async function handleDelete(id: number) {
-    if (!confirm("Delete this expense?")) return;
+  async function handleDelete(id: number, title: string) {
+    const confirmed = await confirm(`Delete "${title}"?`);
+    if (!confirmed) return;
+
     try {
       await api.deleteExpense(id);
       setExpenses((current) => current.filter((e) => e.id !== id));
+      showToast(`"${title}" was deleted.`, "success");
     } catch (err) {
-      alert(err instanceof ApiError ? err.message : "Couldn't delete this expense.");
+      showToast(err instanceof ApiError ? err.message : "Couldn't delete this expense.");
     }
   }
 
@@ -267,7 +274,10 @@ export function DashboardPage() {
                           <button className="btn-ghost btn-small" onClick={() => openEdit(expense)}>
                             Edit
                           </button>
-                          <button className="btn-danger btn-small" onClick={() => handleDelete(expense.id)}>
+                          <button
+                            className="btn-danger btn-small"
+                            onClick={() => handleDelete(expense.id, expense.title)}
+                          >
                             Delete
                           </button>
                         </>

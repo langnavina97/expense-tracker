@@ -1,4 +1,4 @@
-import { defineConfig } from "vite";
+import { defineConfig } from "vitest/config";
 import react from "@vitejs/plugin-react";
 
 // In dev, the API runs separately on :3000 (via `npm run dev` at the repo
@@ -16,5 +16,10 @@ export default defineConfig({
       "/expenses": "http://localhost:3000",
       "/auth": "http://localhost:3000",
     },
+  },
+  test: {
+    environment: "jsdom",
+    setupFiles: ["./src/test/setup.ts"],
+    globals: true,
   },
 });

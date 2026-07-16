@@ -147,6 +147,44 @@ router.patch("/members/:id", requireValidId, async (req, res, next) => {
   }
 });
 
+// Remove a member from my household. LEAD only, and not on yourself - that
+// would leave the household with no lead.
+router.delete("/members/:id", requireValidId, async (req, res, next) => {
+  const targetId = res.locals.id;
+  const currentUser = res.locals.currentUser;
+
+  if (!currentUser.householdId) {
+    return res.status(400).json({ error: "You don't belong to a household." });
+  }
+
+  if (currentUser.role !== Role.LEAD) {
+    return res.status(403).json({ error: "Only the household lead can remove members." });
+  }
+
+  if (targetId === currentUser.id) {
+    return res.status(400).json({ error: "You can't remove yourself from the household." });
+  }
+
+  try {
+    const targetUser = await prisma.user.findUnique({ where: { id: targetId } });
+    if (!targetUser || targetUser.deletedAt || targetUser.householdId !== currentUser.householdId) {
+      return res.status(404).json({ error: "User not found in your household." });
+    }
+
+    await prisma.user.update({
+      where: { id: targetId },
+      data: { householdId: null, role: null },
+    });
+
+    res.status(200).json({ message: "Member removed successfully." });
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2025") {
+      return res.status(404).json({ error: "User not found." });
+    }
+    next(error);
+  }
+});
+
 // Add a dependent (a household member with no login) to my household.
 // LEAD or ADULT only.
 router.post("/dependents", async (req, res, next) => {
@@ -176,6 +214,73 @@ router.post("/dependents", async (req, res, next) => {
 
     res.status(201).json(dependent);
   } catch (error) {
+    next(error);
+  }
+});
+
+// Rename a dependent. LEAD or ADULT only.
+router.patch("/dependents/:id", requireValidId, async (req, res, next) => {
+  const targetId = res.locals.id;
+  const { name } = req.body;
+  const currentUser = res.locals.currentUser;
+
+  if (!currentUser.householdId) {
+    return res.status(400).json({ error: "You don't belong to a household." });
+  }
+
+  if (currentUser.role !== Role.LEAD && currentUser.role !== Role.ADULT) {
+    return res.status(403).json({ error: "Only a household lead or adult can edit dependents." });
+  }
+
+  if (!name) {
+    return res.status(400).json({ error: "name is required." });
+  }
+
+  try {
+    const existing = await prisma.dependent.findUnique({ where: { id: targetId } });
+    if (!existing || existing.householdId !== currentUser.householdId) {
+      return res.status(404).json({ error: "Dependent not found." });
+    }
+
+    const updated = await prisma.dependent.update({ where: { id: targetId }, data: { name } });
+
+    res.status(200).json(updated);
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2025") {
+      return res.status(404).json({ error: "Dependent not found." });
+    }
+    next(error);
+  }
+});
+
+// Remove a dependent. LEAD or ADULT only. The underlying Spender row is left
+// in place (not deleted) - past expenses that included this dependent still
+// need something to point to, the same reasoning as soft-deleting a User.
+router.delete("/dependents/:id", requireValidId, async (req, res, next) => {
+  const targetId = res.locals.id;
+  const currentUser = res.locals.currentUser;
+
+  if (!currentUser.householdId) {
+    return res.status(400).json({ error: "You don't belong to a household." });
+  }
+
+  if (currentUser.role !== Role.LEAD && currentUser.role !== Role.ADULT) {
+    return res.status(403).json({ error: "Only a household lead or adult can remove dependents." });
+  }
+
+  try {
+    const existing = await prisma.dependent.findUnique({ where: { id: targetId } });
+    if (!existing || existing.householdId !== currentUser.householdId) {
+      return res.status(404).json({ error: "Dependent not found." });
+    }
+
+    await prisma.dependent.delete({ where: { id: targetId } });
+
+    res.status(200).json({ message: "Dependent removed successfully." });
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2025") {
+      return res.status(404).json({ error: "Dependent not found." });
+    }
     next(error);
   }
 });

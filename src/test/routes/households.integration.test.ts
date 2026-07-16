@@ -193,6 +193,63 @@ describe("households routes", () => {
     expect(response.status).toBe(404);
   });
 
+  it("DELETE /members/:id removes a member from the household", async () => {
+    const { agent: leadAgent } = await createAuthenticatedAgent();
+    const { agent: otherAgent, userId: otherUserId } = await registerAndLoginNoHousehold("removeme@example.com");
+    await leadAgent.post("/households/members").send({ userId: otherUserId, role: "ADULT" });
+
+    const response = await leadAgent.delete(`/households/members/${otherUserId}`);
+
+    expect(response.status).toBe(200);
+
+    const removedView = await otherAgent.get("/users/me");
+    expect(removedView.body.householdId).toBeNull();
+    expect(removedView.body.role).toBeNull();
+  });
+
+  it("DELETE /members/:id fails if the caller doesn't belong to a household", async () => {
+    const { agent } = await registerAndLoginNoHousehold("nohousehold4@example.com");
+
+    const response = await agent.delete("/households/members/1");
+
+    expect(response.status).toBe(400);
+  });
+
+  it("DELETE /members/:id fails if the caller isn't LEAD", async () => {
+    const { agent: leadAgent } = await createAuthenticatedAgent();
+    const { agent: otherAgent, userId: otherUserId } = await registerAndLoginNoHousehold("nonlead2@example.com");
+    await leadAgent.post("/households/members").send({ userId: otherUserId, role: "ADULT" });
+
+    const response = await otherAgent.delete(`/households/members/${otherUserId}`);
+
+    expect(response.status).toBe(403);
+  });
+
+  it("DELETE /members/:id fails if the lead tries to remove themselves", async () => {
+    const { agent: leadAgent, userId: leadUserId } = await createAuthenticatedAgent();
+
+    const response = await leadAgent.delete(`/households/members/${leadUserId}`);
+
+    expect(response.status).toBe(400);
+  });
+
+  it("DELETE /members/:id fails for a user not in the caller's household", async () => {
+    const { agent: leadAgent } = await createAuthenticatedAgent();
+    const { userId: outsiderId } = await registerAndLoginNoHousehold("outsider2@example.com");
+
+    const response = await leadAgent.delete(`/households/members/${outsiderId}`);
+
+    expect(response.status).toBe(404);
+  });
+
+  it("DELETE /members/:id fails for a nonexistent user", async () => {
+    const { agent: leadAgent } = await createAuthenticatedAgent();
+
+    const response = await leadAgent.delete("/households/members/999999");
+
+    expect(response.status).toBe(404);
+  });
+
   it("POST /dependents adds a dependent to the household", async () => {
     const { agent, householdId } = await createAuthenticatedAgent();
 
@@ -226,5 +283,112 @@ describe("households routes", () => {
     const response = await childAgent.post("/households/dependents").send({ name: "Kid1" });
 
     expect(response.status).toBe(403);
+  });
+
+  it("PATCH /dependents/:id renames a dependent", async () => {
+    const { agent } = await createAuthenticatedAgent();
+    const created = await agent.post("/households/dependents").send({ name: "Kid1" });
+
+    const response = await agent.patch(`/households/dependents/${created.body.id}`).send({ name: "Kiddo" });
+
+    expect(response.status).toBe(200);
+    expect(response.body.name).toBe("Kiddo");
+  });
+
+  it("PATCH /dependents/:id fails if the caller doesn't belong to a household", async () => {
+    const { agent } = await registerAndLoginNoHousehold("nohousehold5@example.com");
+
+    const response = await agent.patch("/households/dependents/1").send({ name: "Kiddo" });
+
+    expect(response.status).toBe(400);
+  });
+
+  it("PATCH /dependents/:id fails when the caller is a CHILD", async () => {
+    const { agent: leadAgent } = await createAuthenticatedAgent();
+    const created = await leadAgent.post("/households/dependents").send({ name: "Kid1" });
+    const { agent: childAgent, userId: childUserId } = await registerAndLoginNoHousehold("child2@example.com");
+    await leadAgent.post("/households/members").send({ userId: childUserId, role: "CHILD" });
+
+    const response = await childAgent.patch(`/households/dependents/${created.body.id}`).send({ name: "Kiddo" });
+
+    expect(response.status).toBe(403);
+  });
+
+  it("PATCH /dependents/:id fails without a name", async () => {
+    const { agent } = await createAuthenticatedAgent();
+    const created = await agent.post("/households/dependents").send({ name: "Kid1" });
+
+    const response = await agent.patch(`/households/dependents/${created.body.id}`).send({});
+
+    expect(response.status).toBe(400);
+  });
+
+  it("PATCH /dependents/:id fails for a dependent in a different household", async () => {
+    const { agent: leadAgent } = await createAuthenticatedAgent();
+    const created = await leadAgent.post("/households/dependents").send({ name: "Kid1" });
+    const { agent: otherLeadAgent } = await registerAndLoginNoHousehold("otherhousehold@example.com");
+    await otherLeadAgent.post("/households").send({ name: "Other Household" });
+
+    const response = await otherLeadAgent.patch(`/households/dependents/${created.body.id}`).send({ name: "Kiddo" });
+
+    expect(response.status).toBe(404);
+  });
+
+  it("PATCH /dependents/:id fails for a nonexistent dependent", async () => {
+    const { agent } = await createAuthenticatedAgent();
+
+    const response = await agent.patch("/households/dependents/999999").send({ name: "Kiddo" });
+
+    expect(response.status).toBe(404);
+  });
+
+  it("DELETE /dependents/:id removes a dependent", async () => {
+    const { agent } = await createAuthenticatedAgent();
+    const created = await agent.post("/households/dependents").send({ name: "Kid1" });
+
+    const response = await agent.delete(`/households/dependents/${created.body.id}`);
+
+    expect(response.status).toBe(200);
+
+    const household = await agent.get("/households");
+    expect(household.body.dependents).toHaveLength(0);
+  });
+
+  it("DELETE /dependents/:id fails if the caller doesn't belong to a household", async () => {
+    const { agent } = await registerAndLoginNoHousehold("nohousehold6@example.com");
+
+    const response = await agent.delete("/households/dependents/1");
+
+    expect(response.status).toBe(400);
+  });
+
+  it("DELETE /dependents/:id fails when the caller is a CHILD", async () => {
+    const { agent: leadAgent } = await createAuthenticatedAgent();
+    const created = await leadAgent.post("/households/dependents").send({ name: "Kid1" });
+    const { agent: childAgent, userId: childUserId } = await registerAndLoginNoHousehold("child3@example.com");
+    await leadAgent.post("/households/members").send({ userId: childUserId, role: "CHILD" });
+
+    const response = await childAgent.delete(`/households/dependents/${created.body.id}`);
+
+    expect(response.status).toBe(403);
+  });
+
+  it("DELETE /dependents/:id fails for a dependent in a different household", async () => {
+    const { agent: leadAgent } = await createAuthenticatedAgent();
+    const created = await leadAgent.post("/households/dependents").send({ name: "Kid1" });
+    const { agent: otherLeadAgent } = await registerAndLoginNoHousehold("otherhousehold2@example.com");
+    await otherLeadAgent.post("/households").send({ name: "Other Household" });
+
+    const response = await otherLeadAgent.delete(`/households/dependents/${created.body.id}`);
+
+    expect(response.status).toBe(404);
+  });
+
+  it("DELETE /dependents/:id fails for a nonexistent dependent", async () => {
+    const { agent } = await createAuthenticatedAgent();
+
+    const response = await agent.delete("/households/dependents/999999");
+
+    expect(response.status).toBe(404);
   });
 });

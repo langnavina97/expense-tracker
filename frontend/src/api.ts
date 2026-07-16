@@ -50,11 +50,20 @@ export const api = {
     request<User>("/households/members", { method: "POST", body: JSON.stringify(data) }),
   updateMemberRole: (userId: number, data: { role: string }) =>
     request<User>(`/households/members/${userId}`, { method: "PATCH", body: JSON.stringify(data) }),
+  removeMember: (userId: number) =>
+    request<{ message: string }>(`/households/members/${userId}`, { method: "DELETE" }),
   addDependent: (data: { name: string }) =>
     request<{ id: number; name: string }>("/households/dependents", {
       method: "POST",
       body: JSON.stringify(data),
     }),
+  renameDependent: (id: number, data: { name: string }) =>
+    request<{ id: number; name: string }>(`/households/dependents/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    }),
+  removeDependent: (id: number) =>
+    request<{ message: string }>(`/households/dependents/${id}`, { method: "DELETE" }),
 
   getCategories: () => request<Category[]>("/categories"),
   createCategory: (data: { name: string }) =>
