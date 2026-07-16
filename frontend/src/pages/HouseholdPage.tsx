@@ -3,6 +3,7 @@ import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
 import { useConfirm } from "../context/ConfirmContext";
 import { api, ApiError } from "../api";
+import { LoadingScreen } from "../components/LoadingScreen";
 import type { Household, Role } from "../types";
 
 const ROLES: Role[] = ["LEAD", "ADULT", "CHILD"];
@@ -126,7 +127,7 @@ export function HouseholdPage() {
     }
   }
 
-  if (loading) return <div className="loading-screen">Loading…</div>;
+  if (loading) return <LoadingScreen />;
   if (!household || !currentUser) return null;
 
   const canAddMembers = currentUser.role === "LEAD";

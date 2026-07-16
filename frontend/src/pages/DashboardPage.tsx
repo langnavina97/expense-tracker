@@ -5,12 +5,46 @@ import { useConfirm } from "../context/ConfirmContext";
 import { useToast } from "../context/ToastContext";
 import { api, ApiError } from "../api";
 import { ExpenseForm } from "../components/ExpenseForm";
-import { CHART_COLORS, PieChart } from "../components/PieChart";
+import { LoadingScreen } from "../components/LoadingScreen";
+import { CHART_COLORS, CHART_OTHER_COLOR, MAX_CHART_SLICES, PieChart, type PieSlice } from "../components/PieChart";
 import type { Category, Expense, Household } from "../types";
 import { formatMoney, spenderName } from "../utils";
 
 function canModify(currentUser: { id: number; role: string | null }, expense: Expense): boolean {
   return currentUser.role !== "CHILD" || expense.createdByUserId === currentUser.id;
+}
+
+// Assigns chart colors in the fixed, CVD-validated order (see PieChart.tsx),
+// sorted by value so the biggest slices get the most distinct hues. Beyond
+// MAX_CHART_SLICES entries, the smallest ones fold into one "Other" slice
+// rather than cycling back through the same colors. Returns both the pie
+// slices and an id->color map, so an expense's category badge always
+// matches its slice in the chart above it.
+function buildBreakdown(entries: { id: number; label: string; value: number }[]) {
+  const withValues = entries.filter((e) => e.value > 0).sort((a, b) => b.value - a.value);
+  const overflow = withValues.length > MAX_CHART_SLICES;
+  const visibleCount = overflow ? MAX_CHART_SLICES - 1 : withValues.length;
+
+  const colorById = new Map<number, string>();
+  const slices: PieSlice[] = [];
+
+  withValues.slice(0, visibleCount).forEach((entry, i) => {
+    const color = CHART_COLORS[i]!;
+    colorById.set(entry.id, color);
+    slices.push({ label: entry.label, value: entry.value, color });
+  });
+
+  if (overflow) {
+    const rest = withValues.slice(visibleCount);
+    rest.forEach((entry) => colorById.set(entry.id, CHART_OTHER_COLOR));
+    slices.push({
+      label: "Other",
+      value: rest.reduce((sum, entry) => sum + entry.value, 0),
+      color: CHART_OTHER_COLOR,
+    });
+  }
+
+  return { slices, colorById };
 }
 
 export function DashboardPage() {
@@ -90,14 +124,11 @@ export function DashboardPage() {
     });
   }
 
-  if (loading) return <div className="loading-screen">Loading…</div>;
+  if (loading) return <LoadingScreen />;
   if (error) return <div className="alert alert-danger">{error}</div>;
   if (!household || !currentUser) return null;
 
   const categoryById = new Map(categories.map((c) => [c.id, c]));
-  // Same index-based assignment the pie chart uses, so a category's badge
-  // color always matches its slice.
-  const categoryColor = new Map(categories.map((c, i) => [c.id, CHART_COLORS[i % CHART_COLORS.length]!]));
 
   // Both breakdowns always reflect every expense, regardless of the filter
   // below - they're the "big picture" the filter lets you drill into.
@@ -116,25 +147,17 @@ export function DashboardPage() {
     }
   }
 
-  const categorySlices = categories
-    .map((category, index) => ({
-      label: category.name,
-      value: totalsByCategory.get(category.id) ?? 0,
-      color: CHART_COLORS[index % CHART_COLORS.length]!,
-    }))
-    .filter((slice) => slice.value > 0);
+  const { slices: categorySlices, colorById: categoryColor } = buildBreakdown(
+    categories.map((c) => ({ id: c.id, label: c.name, value: totalsByCategory.get(c.id) ?? 0 }))
+  );
 
   const people = [
     ...household.members.map((m) => ({ spenderId: m.spenderId, name: m.name })),
     ...household.dependents.map((d) => ({ spenderId: d.spenderId, name: d.name })),
   ];
-  const peopleSlices = people
-    .map((person, index) => ({
-      label: person.name,
-      value: totalsBySpender.get(person.spenderId) ?? 0,
-      color: CHART_COLORS[index % CHART_COLORS.length]!,
-    }))
-    .filter((slice) => slice.value > 0);
+  const { slices: peopleSlices } = buildBreakdown(
+    people.map((p) => ({ id: p.spenderId, label: p.name, value: totalsBySpender.get(p.spenderId) ?? 0 }))
+  );
 
   const filteredExpenses =
     selectedCategoryIds.size === 0 ? expenses : expenses.filter((e) => selectedCategoryIds.has(e.categoryId));
@@ -249,7 +272,7 @@ export function DashboardPage() {
                           <span
                             className="badge"
                             style={{
-                              backgroundColor: `${categoryColor.get(category.id)}22`,
+                              backgroundColor: `color-mix(in srgb, ${categoryColor.get(category.id)} 18%, transparent)`,
                               color: categoryColor.get(category.id),
                             }}
                           >

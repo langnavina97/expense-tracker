@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { api, ApiError } from "../api";
 import { useConfirm } from "../context/ConfirmContext";
 import { useToast } from "../context/ToastContext";
+import { LoadingScreen } from "../components/LoadingScreen";
 import type { Category } from "../types";
 
 export function CategoriesPage() {
@@ -72,7 +73,7 @@ export function CategoriesPage() {
     }
   }
 
-  if (loading) return <div className="loading-screen">Loading…</div>;
+  if (loading) return <LoadingScreen />;
 
   return (
     <div>

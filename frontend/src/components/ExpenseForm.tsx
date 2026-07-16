@@ -187,7 +187,7 @@ export function ExpenseForm({ household, categories, expense, onClose, onSaved }
               >
                 <input
                   type="checkbox"
-                  style={{ display: "none" }}
+                  className="sr-only"
                   checked={spenderIds.includes(person.spenderId)}
                   onChange={() => toggleSpender(person.spenderId)}
                 />
