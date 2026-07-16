@@ -168,17 +168,21 @@ export function DashboardPage() {
         </div>
       </div>
 
-      {categorySlices.length > 0 && (
-        <div className="card">
-          <h2 style={{ fontSize: "1rem", marginBottom: 16 }}>Spending by category</h2>
-          <PieChart slices={categorySlices} />
-        </div>
-      )}
+      {(categorySlices.length > 0 || peopleSlices.length > 0) && (
+        <div className="charts-row">
+          {categorySlices.length > 0 && (
+            <div className="card">
+              <h2 style={{ fontSize: "1rem", marginBottom: 16 }}>Spending by category</h2>
+              <PieChart slices={categorySlices} />
+            </div>
+          )}
 
-      {peopleSlices.length > 0 && (
-        <div className="card">
-          <h2 style={{ fontSize: "1rem", marginBottom: 16 }}>Spending by person</h2>
-          <PieChart slices={peopleSlices} />
+          {peopleSlices.length > 0 && (
+            <div className="card">
+              <h2 style={{ fontSize: "1rem", marginBottom: 16 }}>Spending by person</h2>
+              <PieChart slices={peopleSlices} />
+            </div>
+          )}
         </div>
       )}
 

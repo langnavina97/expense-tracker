@@ -377,10 +377,21 @@ button:disabled {
   margin-top: 4px;
 }
 
+.charts-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 20px;
+  margin-bottom: 20px;
+}
+
+.charts-row > .card {
+  margin-top: 0;
+}
+
 .pie-chart-wrap {
   display: flex;
   align-items: center;
-  gap: 28px;
+  gap: 20px;
   flex-wrap: wrap;
 }
 
@@ -423,7 +434,6 @@ button:disabled {
 }
 
 .pie-legend-label {
-  flex: 1;
   font-weight: 550;
 }
 
@@ -613,6 +623,11 @@ button:disabled {
 
   .card {
     padding: 18px;
+  }
+
+  .charts-row {
+    grid-template-columns: 1fr;
+    gap: 20px;
   }
 
   .topbar {
