@@ -12,6 +12,7 @@ if (!CLIENT_ID || !CLIENT_SECRET || !REDIRECT_URI) {
 }
 
 const client = new OAuth2Client(CLIENT_ID, CLIENT_SECRET, REDIRECT_URI);
+const SESSION_SECRET = process.env.SESSION_SECRET!;
 
 // The callback below is hit by a real browser navigation (Google redirects
 // here directly), not a frontend fetch call - so every outcome, success or
@@ -24,24 +25,53 @@ function redirectToFrontend(res: import("express").Response, path: string) {
   res.redirect(`${FRONTEND_URL.replace(/\/$/, "")}${path}`);
 }
 
+// The CSRF `state` value used to be a random nonce stashed in the session
+// and compared on the callback - but that requires the session cookie to
+// survive a full round trip through Google's own redirect chain, which
+// browsers are increasingly aggressive about restricting for cross-site
+// navigations (even with SameSite=Lax). Signing the state itself instead
+// means the callback can verify it without any session/cookie lookup at
+// all - it just checks the signature and that it isn't stale.
+const STATE_MAX_AGE_MS = 10 * 60 * 1000; // 10 minutes - plenty of time to complete Google's consent screen
+
+function signState(): string {
+  const nonce = crypto.randomBytes(16).toString("hex");
+  const issuedAt = Date.now().toString();
+  const payload = `${nonce}.${issuedAt}`;
+  const signature = crypto.createHmac("sha256", SESSION_SECRET).update(payload).digest("hex");
+  return `${payload}.${signature}`;
+}
+
+function isValidState(state: unknown): boolean {
+  if (typeof state !== "string") return false;
+
+  const [nonce, issuedAt, signature] = state.split(".");
+  if (!nonce || !issuedAt || !signature) return false;
+
+  const expectedSignature = crypto
+    .createHmac("sha256", SESSION_SECRET)
+    .update(`${nonce}.${issuedAt}`)
+    .digest("hex");
+
+  const signatureBuffer = Buffer.from(signature);
+  const expectedBuffer = Buffer.from(expectedSignature);
+  if (signatureBuffer.length !== expectedBuffer.length) return false;
+  if (!crypto.timingSafeEqual(signatureBuffer, expectedBuffer)) return false;
+
+  const age = Date.now() - Number(issuedAt);
+  return age >= 0 && age <= STATE_MAX_AGE_MS;
+}
+
 const router = Router();
 
-// Step 1: send the browser to Google's consent screen. A random `state`
-// value is stashed in the session and checked again on the callback - this
-// is what stops an attacker from tricking someone into completing an OAuth
-// flow that isn't actually theirs (CSRF against the login flow itself).
+// Step 1: send the browser to Google's consent screen, with a signed,
+// self-verifying state value - see isValidState above for why this isn't
+// session-based.
 router.get("/google", (req, res) => {
-  const state = crypto.randomBytes(16).toString("hex");
-  req.session.oauthState = state;
-
   const url = client.generateAuthUrl({
     scope: ["openid", "email", "profile"],
-    state,
+    state: signState(),
   });
-
-  // Temporary diagnostic logging for the state-mismatch reports - remove
-  // once the cause is confirmed.
-  console.log("[oauth] /google", { sessionId: req.sessionID, cookieHeader: Boolean(req.headers.cookie) });
 
   res.redirect(url);
 });
@@ -52,20 +82,9 @@ router.get("/google", (req, res) => {
 router.get("/google/callback", async (req, res) => {
   const { code, state } = req.query;
 
-  // Temporary diagnostic logging for the state-mismatch reports - remove
-  // once the cause is confirmed.
-  console.log("[oauth] /google/callback", {
-    sessionId: req.sessionID,
-    cookieHeader: Boolean(req.headers.cookie),
-    hasSessionState: Boolean(req.session.oauthState),
-    stateMatches: state === req.session.oauthState,
-    userAgent: req.headers["user-agent"],
-  });
-
-  if (!state || state !== req.session.oauthState) {
+  if (!isValidState(state)) {
     return redirectToFrontend(res, "/login?error=oauth_state");
   }
-  delete req.session.oauthState;
 
   if (typeof code !== "string") {
     return redirectToFrontend(res, "/login?error=oauth_code");

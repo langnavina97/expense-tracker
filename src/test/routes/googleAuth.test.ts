@@ -27,8 +27,8 @@ afterEach(() => {
   verifyIdTokenMock.mockReset();
 });
 
-// Simulates the browser's first hop: visit /auth/google, capture the
-// session-carrying agent and the state Google would echo back on callback.
+// Simulates the browser's first hop: visit /auth/google, capture the agent
+// and the signed state Google would echo back on callback.
 async function startFlow() {
   const agent = request.agent(app);
   const response = await agent.get("/auth/google");
@@ -47,7 +47,7 @@ function mockGoogleUser(overrides: Partial<{ email: string; name: string; sub: s
 }
 
 describe("GET /auth/google", () => {
-  it("redirects to Google's consent screen and stashes a state in the session", async () => {
+  it("redirects to Google's consent screen with a signed state", async () => {
     const { response, state } = await startFlow();
 
     expect(response.status).toBe(302);
@@ -66,13 +66,48 @@ describe("GET /auth/google/callback", () => {
     expect(response.headers.location).toBe("/login?error=oauth_state");
   });
 
-  it("redirects to /login?error=oauth_state if state doesn't match the session's", async () => {
+  it("redirects to /login?error=oauth_state if the state is malformed", async () => {
     const { agent } = await startFlow();
 
     const response = await agent.get("/auth/google/callback").query({ code: "abc", state: "wrong-state" });
 
     expect(response.status).toBe(302);
     expect(response.headers.location).toBe("/login?error=oauth_state");
+  });
+
+  it("redirects to /login?error=oauth_state if the state's signature is forged (same length)", async () => {
+    const { agent } = await startFlow();
+    const forgedState = `abc.${Date.now()}.${"0".repeat(64)}`;
+
+    const response = await agent.get("/auth/google/callback").query({ code: "abc", state: forgedState });
+
+    expect(response.status).toBe(302);
+    expect(response.headers.location).toBe("/login?error=oauth_state");
+  });
+
+  it("redirects to /login?error=oauth_state if the state's signature has the wrong length", async () => {
+    const { agent } = await startFlow();
+    const forgedState = `abc.${Date.now()}.short`;
+
+    const response = await agent.get("/auth/google/callback").query({ code: "abc", state: forgedState });
+
+    expect(response.status).toBe(302);
+    expect(response.headers.location).toBe("/login?error=oauth_state");
+  });
+
+  it("redirects to /login?error=oauth_state if the state has expired", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      const { agent, state } = await startFlow();
+      vi.advanceTimersByTime(11 * 60 * 1000);
+
+      const response = await agent.get("/auth/google/callback").query({ code: "abc", state });
+
+      expect(response.status).toBe(302);
+      expect(response.headers.location).toBe("/login?error=oauth_state");
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("redirects to /login?error=oauth_code if code is missing", async () => {
