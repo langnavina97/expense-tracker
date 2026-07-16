@@ -39,6 +39,10 @@ router.get("/google", (req, res) => {
     state,
   });
 
+  // Temporary diagnostic logging for the state-mismatch reports - remove
+  // once the cause is confirmed.
+  console.log("[oauth] /google", { sessionId: req.sessionID, cookieHeader: Boolean(req.headers.cookie) });
+
   res.redirect(url);
 });
 
@@ -47,6 +51,16 @@ router.get("/google", (req, res) => {
 // token's signature, then find-or-create the User and log them in.
 router.get("/google/callback", async (req, res) => {
   const { code, state } = req.query;
+
+  // Temporary diagnostic logging for the state-mismatch reports - remove
+  // once the cause is confirmed.
+  console.log("[oauth] /google/callback", {
+    sessionId: req.sessionID,
+    cookieHeader: Boolean(req.headers.cookie),
+    hasSessionState: Boolean(req.session.oauthState),
+    stateMatches: state === req.session.oauthState,
+    userAgent: req.headers["user-agent"],
+  });
 
   if (!state || state !== req.session.oauthState) {
     return redirectToFrontend(res, "/login?error=oauth_state");
