@@ -42,11 +42,14 @@ function signState(): string {
   return `${payload}.${signature}`;
 }
 
-function isValidState(state: unknown): boolean {
-  if (typeof state !== "string") return false;
+// Returns a reason string when the state fails validation, or null when
+// it's valid - the reason exists purely so the callback can log exactly
+// where verification failed while this bug is being tracked down.
+function invalidStateReason(state: unknown): string | null {
+  if (typeof state !== "string") return "not_a_string";
 
   const [nonce, issuedAt, signature] = state.split(".");
-  if (!nonce || !issuedAt || !signature) return false;
+  if (!nonce || !issuedAt || !signature) return "malformed";
 
   const expectedSignature = crypto
     .createHmac("sha256", SESSION_SECRET)
@@ -55,23 +58,34 @@ function isValidState(state: unknown): boolean {
 
   const signatureBuffer = Buffer.from(signature);
   const expectedBuffer = Buffer.from(expectedSignature);
-  if (signatureBuffer.length !== expectedBuffer.length) return false;
-  if (!crypto.timingSafeEqual(signatureBuffer, expectedBuffer)) return false;
+  if (signatureBuffer.length !== expectedBuffer.length) return "signature_length_mismatch";
+  if (!crypto.timingSafeEqual(signatureBuffer, expectedBuffer)) return "signature_mismatch";
 
   const age = Date.now() - Number(issuedAt);
-  return age >= 0 && age <= STATE_MAX_AGE_MS;
+  if (age < 0) return "issued_in_the_future";
+  if (age > STATE_MAX_AGE_MS) return "expired";
+
+  return null;
 }
 
 const router = Router();
 
 // Step 1: send the browser to Google's consent screen, with a signed,
-// self-verifying state value - see isValidState above for why this isn't
+// self-verifying state value - see invalidStateReason above for why this isn't
 // session-based.
 router.get("/google", (req, res) => {
+  const state = signState();
+
   const url = client.generateAuthUrl({
     scope: ["openid", "email", "profile"],
-    state: signState(),
+    state,
   });
+
+  // Temporary diagnostic logging while tracking down the state-mismatch
+  // reports - remove once resolved. Logs the state itself (a short-lived,
+  // single-use CSRF token, not a secret) so it can be correlated with what
+  // the callback receives.
+  console.log("[oauth] /google generated state:", state);
 
   res.redirect(url);
 });
@@ -82,7 +96,12 @@ router.get("/google", (req, res) => {
 router.get("/google/callback", async (req, res) => {
   const { code, state } = req.query;
 
-  if (!isValidState(state)) {
+  const reason = invalidStateReason(state);
+  // Temporary diagnostic logging while tracking down the state-mismatch
+  // reports - remove once resolved.
+  console.log("[oauth] /google/callback received state:", state, "reason:", reason ?? "valid");
+
+  if (reason) {
     return redirectToFrontend(res, "/login?error=oauth_state");
   }
 

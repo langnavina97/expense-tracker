@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import request from "supertest";
+import crypto from "crypto";
 import { prisma } from "../../prisma.js";
 
 let capturedState = "";
@@ -90,6 +91,22 @@ describe("GET /auth/google/callback", () => {
     const forgedState = `abc.${Date.now()}.short`;
 
     const response = await agent.get("/auth/google/callback").query({ code: "abc", state: forgedState });
+
+    expect(response.status).toBe(302);
+    expect(response.headers.location).toBe("/login?error=oauth_state");
+  });
+
+  it("redirects to /login?error=oauth_state if the state is issued in the future", async () => {
+    const agent = request.agent(app);
+    const nonce = "abc123";
+    const issuedAt = (Date.now() + 60_000).toString();
+    const signature = crypto
+      .createHmac("sha256", "test-session-secret-not-for-production")
+      .update(`${nonce}.${issuedAt}`)
+      .digest("hex");
+    const futureState = `${nonce}.${issuedAt}.${signature}`;
+
+    const response = await agent.get("/auth/google/callback").query({ code: "abc", state: futureState });
 
     expect(response.status).toBe(302);
     expect(response.headers.location).toBe("/login?error=oauth_state");
